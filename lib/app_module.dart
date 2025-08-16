@@ -1,0 +1,24 @@
+import 'package:flutter_modular/flutter_modular.dart';
+import 'package:projetos/screens/home/home_screen.dart';
+import 'package:projetos/screens/home/pages/overview_page.dart';
+import 'package:projetos/screens/login_screen.dart';
+import 'package:projetos/services/auth_service.dart';
+import 'guards/auth_guard.dart';
+
+class AppModule extends Module {
+  @override
+  void binds(i) {
+    i.addSingleton(AuthService.new);
+  }
+
+  @override
+  void routes(r) {
+    r.child('/', child: (context) => const LoginScreen(), guards: [AuthGuard()]);
+    r.child('/home',
+        child: (context) => const HomeScreen(),
+        guards: [AuthGuard()],
+        children: [
+          ChildRoute('/overview', child: (context) => const OverviewPage()),
+        ]);
+  }
+}

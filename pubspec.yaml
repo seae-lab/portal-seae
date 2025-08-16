@@ -1,0 +1,35 @@
+name: projetos
+description: "Portal Administrativo de Gestão da SEAE"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Pacotes principais do app
+  firebase_core:
+  firebase_auth:
+  cloud_firestore:
+  provider:
+  google_fonts:
+  cupertino_icons: ^1.0.8
+  google_sign_in: ^6.2.1
+  font_awesome_flutter: ^10.9.0
+  flutter_svg: ^2.2.0
+  flutter_modular: ^6.4.1
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0 # Apenas as dependências de dev ficam aqui
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "624901911891",
+    "project_id": "portal-seae",
+    "storage_bucket": "portal-seae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:624901911891:android:7ee822400957a6b486dda6",
+        "android_client_info": {
+          "package_name": "br.org.seae.projetos"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "624901911891-gtnob7u5icssrcgs6s7u2morn1ig3t8t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.org.seae.projetos",
+            "certificate_hash": "7d0cfc00f9080cd457abab9bcc18cccbf065134b"
+          }
+        },
+        {
+          "client_id": "624901911891-5f8d7ra7b7ph2gej1001ju5prnfbgl2e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLR3ktBc9SMCgdm3UMVRvGvkRPJwF17mM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "624901911891-5f8d7ra7b7ph2gej1001ju5prnfbgl2e.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "624901911891-9mp0fiogrohejl6b7j42pr3mcurfsmtc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "br.org.seae.projetos"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
