@@ -6,21 +6,23 @@ class UserPermissions {
 
   UserPermissions(this.roles);
 
-  // MÉTODO CORRIGIDO
+  // MÉTODO ATUALIZADO
   factory UserPermissions.fromMap(Map<String, dynamic> data) {
     final rolesMap = <String, bool>{};
-    // Iteramos sobre os dados do Firestore de forma segura
     data.forEach((key, value) {
-      // Se a chave começa com "papel_" e o valor é exatamente 'true'
-      if (key.startsWith('papel_') && value == true) {
+      // Agora, qualquer campo que seja um booleano 'true' é considerado um papel.
+      // Isso torna o sistema flexível para novos papéis.
+      if (value is bool && value == true) {
         rolesMap[key] = value;
       }
     });
     return UserPermissions(rolesMap);
   }
 
-  bool get isAdmin => roles['papel_admin'] ?? false;
+  // GETTER ATUALIZADO
+  bool get isAdmin => roles['admin'] ?? false;
 
+  // Este método continua igual, mas agora receberá nomes de papéis sem o prefixo.
   bool hasRole(String roleName) {
     if (isAdmin) return true;
     return roles[roleName] ?? false;

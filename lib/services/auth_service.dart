@@ -80,14 +80,16 @@ class AuthService with ChangeNotifier {
       return '/home/overview';
     }
 
-    if (currentUserPermissions!.hasRole('papel_dij')) {
+    // NOMES DOS PAPÉIS ATUALIZADOS
+    if (currentUserPermissions!.hasRole('dij')) {
       return '/home/dij';
     }
+    // Exemplo para o futuro:
+    // if (currentUserPermissions!.hasRole('editor_projetos')) {
+    //   return '/home/projetos';
+    // }
 
-    // Adicione outras regras de redirecionamento aqui
-
-    // Se não encontrar uma rota principal para o papel, redireciona para a primeira que ele tiver acesso
-    // Ou uma página genérica de "bem-vindo". Por enquanto, vamos manter um fallback.
+    // Fallback se não encontrar rota prioritária
     return '/home/overview';
   }
 

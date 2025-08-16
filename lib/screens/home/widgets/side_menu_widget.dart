@@ -18,10 +18,8 @@ class SideMenuWidget extends StatelessWidget {
             child: Image.asset('assets/images/logo_SEAE_azul.png'),
           ),
 
-          // ---- WIDGETS CONDICIONAIS ----
-          // O 'if' dentro da lista só adiciona o widget se a condição for verdadeira
-
-          if (permissions?.hasRole('papel_admin') ?? false)
+          // NOMES DOS PAPÉIS ATUALIZADOS
+          if (permissions?.hasRole('admin') ?? false)
             ListTile(
               onTap: () => Modular.to.navigate('/home/overview'),
               selected: currentRoute.startsWith('/home/overview'),
@@ -29,7 +27,7 @@ class SideMenuWidget extends StatelessWidget {
               title: const Text('Visão Geral'),
             ),
 
-          if (permissions?.hasRole('papel_admin') ?? false)
+          if (permissions?.hasRole('admin') ?? false)
             ListTile(
               onTap: () => Modular.to.navigate('/home/users'),
               selected: currentRoute.startsWith('/home/users'),
@@ -37,11 +35,11 @@ class SideMenuWidget extends StatelessWidget {
               title: const Text('Usuários'),
             ),
 
-          if (permissions?.hasRole('papel_dij') ?? false)
+          if (permissions?.hasRole('dij') ?? false)
             ListTile(
               onTap: () => Modular.to.navigate('/home/dij'),
               selected: currentRoute.startsWith('/home/dij'),
-              leading: const Icon(Icons.book_outlined), // Exemplo de ícone
+              leading: const Icon(Icons.book_outlined),
               title: const Text('Página DIJ'),
             ),
 
@@ -49,7 +47,7 @@ class SideMenuWidget extends StatelessWidget {
           ListTile(
             onTap: () async {
               await authService.signOut();
-              Modular.to.navigate('/');
+              if (context.mounted) Modular.to.navigate('/');
             },
             leading: const Icon(Icons.logout),
             title: const Text('Sair'),
