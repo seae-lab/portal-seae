@@ -23,22 +23,15 @@ class _LoginFormState extends State<LoginForm> {
     final result = await authService.signInWithGoogle();
 
     if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() { _isLoading = false; });
 
       if (result != null) {
-        // Se o resultado não for nulo, houve um erro. Apenas mostramos a mensagem.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        // Mostra o erro
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
       } else {
-        // Se o resultado for nulo, o login foi um sucesso.
-        // Navegamos explicitamente para a home.
-        Modular.to.navigate('/home/overview');
+        // SUCESSO! Pergunta ao AuthService qual é a rota certa
+        final initialRoute = authService.getInitialRouteForUser();
+        Modular.to.navigate(initialRoute);
       }
     }
   }
