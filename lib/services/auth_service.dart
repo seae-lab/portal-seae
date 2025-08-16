@@ -2,12 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_modular/flutter_modular.dart';
 
-class AuthService with ChangeNotifier implements Disposable {
+class AuthService with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // O clientId é necessário apenas para a Web para garantir o idToken.
     clientId: kIsWeb ? '624901911891-5f8d7ra7b7ph2gej1001ju5prnfbgl2e.apps.googleusercontent.com' : null,
   );
 
@@ -22,7 +22,8 @@ class AuthService with ChangeNotifier implements Disposable {
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       if (googleAuth.idToken == null) {
-        await signOut();
+        // Se o idToken vier nulo, a autenticação falhou do ponto de vista do Firebase.
+        await signOut(); // Limpa qualquer estado parcial de login.
         return 'Não foi possível obter o token de identificação do Google. Tente novamente.';
       }
 
@@ -31,21 +32,26 @@ class AuthService with ChangeNotifier implements Disposable {
         idToken: googleAuth.idToken,
       );
 
+      // 3. Autentica no Firebase com as credenciais obtidas.
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       final User? user = userCredential.user;
 
+      // 4. Se a autenticação no Firebase foi bem-sucedida, fazemos as validações de negócio.
       if (user != null) {
+        // Validação de Domínio
         if (!user.email!.endsWith('@seae.org.br')) {
-          await signOut();
+          await signOut(); // Desloga IMEDIATAMENTE se o domínio for inválido.
           return 'Acesso permitido apenas para contas @seae.org.br.';
         }
 
+        // Validação de Permissão na lista de admins
         final docSnapshot = await _firestore.collection('admins').doc(user.email).get();
         if (!docSnapshot.exists) {
-          await signOut();
+          await signOut(); // Desloga IMEDIATAMENTE se não estiver na lista.
           return 'Este usuário não possui permissão de administrador.';
         }
 
+        // Se todas as validações passaram, o login é um sucesso.
         return null;
       }
 
@@ -60,17 +66,14 @@ class AuthService with ChangeNotifier implements Disposable {
     }
   }
 
+  // MÉTODO ATUALIZADO
   Future<void> signOut() async {
+    // O disconnect é mais eficaz na web para garantir um estado limpo.
     if (kIsWeb) {
       await _googleSignIn.disconnect();
     }
     await _googleSignIn.signOut();
     await _auth.signOut();
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    // Método dispose da interface Disposable do Modular.
   }
 }

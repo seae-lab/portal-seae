@@ -9,28 +9,32 @@ class AuthGuard extends RouteGuard {
 
   @override
   Future<bool> canActivate(String path, ModularRoute router) async {
-    // A linha "isModuleReady" foi removida.
-    // Agora, esperamos o Firebase verificar o estado de autenticação inicial.
+    // Esperamos o Firebase verificar o estado de autenticação inicial.
     final user = await FirebaseAuth.instance.authStateChanges().first;
 
-    // Verificamos se a rota que o usuário está tentando acessar é protegida.
-    final isProtectedRoute = path.startsWith('/home');
+    // Verificamos se a rota que o usuário está tentando acessar é a de login.
+    final isTryingToLogin = path == '/';
 
-    if (isProtectedRoute) {
-      // Se a rota é protegida, só pode ser ativada se o usuário existir (não for nulo).
-      return user != null;
+    if (isTryingToLogin) {
+      // Se está tentando acessar a tela de login:
+      if (user != null) {
+        // Se já está logado, não deixamos ele ver a tela de login de novo.
+        // Redirecionamos para a home e bloqueamos a rota de login atual.
+        Modular.to.navigate('/home/overview');
+        return false;
+      }
+      // Se não está logado, ele PODE ver a tela de login.
+      return true;
     }
 
-    // Se a rota NÃO é protegida (como a de login '/'),
-    // verificamos se o usuário já está logado.
-    if (user != null) {
-      // Se já está logado, não deixamos ele ver a tela de login de novo.
-      // Redirecionamos para a home e bloqueamos a rota de login atual.
-      Modular.to.navigate('/home/overview');
+    // Se está tentando acessar qualquer outra rota (protegida):
+    if (user == null) {
+      // Se não está logado, manda para o login e bloqueia a rota atual.
+      Modular.to.navigate('/');
       return false;
     }
 
-    // Se não está logado, ele pode ver a tela de login.
+    // Se está logado, pode acessar a rota protegida.
     return true;
   }
 }
