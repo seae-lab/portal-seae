@@ -7,6 +7,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print("--- RECONSTRUINDO HomeScreen ---");
     return LayoutBuilder(
       builder: (context, constraints) {
         // Verifica se a tela é larga o suficiente para o menu lateral fixo

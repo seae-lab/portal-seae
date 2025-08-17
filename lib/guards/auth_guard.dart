@@ -1,40 +1,47 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:projetos/services/auth_service.dart';
 
 class AuthGuard extends RouteGuard {
-  // Se a guarda falhar (usuário não logado tentando acessar rota protegida),
-  // redireciona para a tela de login.
   AuthGuard() : super(redirectTo: '/');
 
   @override
-  Future<bool> canActivate(String path, ModularRoute router) async {
-    // Esperamos o Firebase verificar o estado de autenticação inicial.
-    final user = await FirebaseAuth.instance.authStateChanges().first;
+  Future<bool> canActivate(String path, ModularRoute route) async {
+    final user = FirebaseAuth.instance.currentUser;
 
-    // Verificamos se a rota que o usuário está tentando acessar é a de login.
-    final isTryingToLogin = path == '/';
-
-    if (isTryingToLogin) {
-      // Se está tentando acessar a tela de login:
-      if (user != null) {
-        // Se já está logado, não deixamos ele ver a tela de login de novo.
-        // Redirecionamos para a home e bloqueamos a rota de login atual.
-        Modular.to.navigate('/home/overview');
-        return false;
-      }
-      // Se não está logado, ele PODE ver a tela de login.
-      return true;
-    }
-
-    // Se está tentando acessar qualquer outra rota (protegida):
+    // --- CENÁRIO 1: Usuário NÃO está logado no Firebase ---
     if (user == null) {
-      // Se não está logado, manda para o login e bloqueia a rota atual.
-      Modular.to.navigate('/');
-      return false;
+      // Permite o acesso apenas à tela de login ('/').
+      // Se tentar acessar qualquer outra página, será redirecionado para '/'.
+      return path == '/';
     }
 
-    // Se está logado, pode acessar a rota protegida.
+    // --- CENÁRIO 2: Usuário ESTÁ logado no Firebase (Sessão persistiu após refresh) ---
+    final authService = Modular.get<AuthService>();
+
+    // Tenta carregar as permissões do usuário a partir do Firestore.
+    // Isso "reidrata" o estado do app.
+    final bool hasPermissions =
+    await authService.tryToLoadPermissionsForCurrentUser();
+
+    if (!hasPermissions) {
+      // Se o usuário está logado no Firebase mas não tem permissões no Firestore,
+      // o acesso a rotas protegidas é negado. Ele é forçado a deslogar e voltar para '/'.
+      return path == '/';
+    }
+
+    // --- CENÁRIO 3: Usuário está logado E com permissões carregadas ---
+
+    // Se ele está totalmente autenticado e tenta acessar a tela de login...
+    if (path == '/') {
+      // ...redirecionamos para a sua página inicial designada, evitando que veja o login de novo.
+      final initialRoute = authService.getInitialRouteForUser();
+      Modular.to.navigate(initialRoute);
+      return false; // Impede a navegação para '/'
+    }
+
+    // Se a rota for qualquer outra (protegida), o acesso é permitido.
     return true;
   }
 }

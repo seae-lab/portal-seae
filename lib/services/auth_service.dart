@@ -1,21 +1,45 @@
-import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-
-// CAMINHO DE IMPORTAÇÃO CORRIGIDO
 import 'package:projetos/screens/models/user_permissions.dart';
 
 class AuthService with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb ? '624901911891-5f8d7ra7b7ph2gej1001ju5prnfbgl2e.apps.googleusercontent.com' : null,
+    clientId: kIsWeb
+        ? '624901911891-5f8d7ra7b7ph2gej1001ju5prnfbgl2e.apps.googleusercontent.com'
+        : null,
   );
 
   Stream<User?> get user => _auth.authStateChanges();
   UserPermissions? currentUserPermissions;
 
+  /// Método privado para buscar e configurar as permissões de um usuário no Firestore.
+  /// Retorna 'true' se as permissões foram carregadas com sucesso.
+  Future<bool> _fetchAndSetPermissions(User user) async {
+    final docSnapshot =
+    await _firestore.collection('base_permissoes').doc(user.email).get();
+
+    if (!docSnapshot.exists) {
+      await signOut(); // Garante que o usuário seja deslogado se não tiver um documento de permissão
+      return false;
+    }
+
+    final permissionsData = docSnapshot.data() as Map<String, dynamic>;
+    currentUserPermissions = UserPermissions.fromMap(permissionsData);
+
+    if (!currentUserPermissions!.hasAnyRole) {
+      await signOut(); // Garante que o usuário seja deslogado se não tiver nenhum papel ativo
+      return false;
+    }
+
+    notifyListeners();
+    return true; // Permissões carregadas com sucesso
+  }
+
+  /// Tenta logar o usuário com o Google e carregar suas permissões.
   Future<String?> signInWithGoogle() async {
     try {
       late UserCredential userCredential;
@@ -26,7 +50,8 @@ class AuthService with ChangeNotifier {
       } else {
         final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
         if (googleUser == null) return 'Login cancelado pelo usuário.';
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+        await googleUser.authentication;
         if (googleAuth.idToken == null) {
           await signOut();
           return 'Não foi possível obter o token do Google.';
@@ -46,57 +71,67 @@ class AuthService with ChangeNotifier {
           return 'Acesso permitido apenas para contas @seae.org.br.';
         }
 
-        final docSnapshot = await _firestore.collection('base_permissoes').doc(user.email).get();
+        // Usa o método centralizado para buscar permissões
+        final bool hasPermissions = await _fetchAndSetPermissions(user);
 
-        if (!docSnapshot.exists) {
-          await signOut();
-          return 'Este usuário não possui permissões de acesso.';
-        }
-
-        final permissionsData = docSnapshot.data() as Map<String, dynamic>;
-        currentUserPermissions = UserPermissions.fromMap(permissionsData);
-
-        if (!currentUserPermissions!.hasAnyRole) {
-          await signOut();
+        if (hasPermissions) {
+          return null; // Sucesso
+        } else {
           return 'Este usuário não possui nenhum papel atribuído no sistema.';
         }
-
-        notifyListeners();
-        return null;
       }
       return 'Ocorreu um erro desconhecido.';
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'popup-closed-by-user' || e.code == 'cancelled-popup-request') return 'Login cancelado.';
+      if (e.code == 'popup-closed-by-user' ||
+          e.code == 'cancelled-popup-request') return 'Login cancelado.';
       return 'Ocorreu um erro durante o login.';
     } catch (e) {
       return 'Ocorreu um erro inesperado.';
     }
   }
 
-  String getInitialRouteForUser() {
-    if (currentUserPermissions == null) return '/';
+  /// Tenta carregar as permissões para o usuário atualmente logado (usado no refresh).
+  Future<bool> tryToLoadPermissionsForCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      // Se as permissões já foram carregadas, não busca de novo
+      if (currentUserPermissions != null) return true;
 
-    if (currentUserPermissions!.isAdmin) {
-      return '/home/overview';
+      // Se não, busca no Firestore
+      return await _fetchAndSetPermissions(user);
     }
-
-    // NOMES DOS PAPÉIS ATUALIZADOS
-    if (currentUserPermissions!.hasRole('dij')) {
-      return '/home/dij';
-    }
-    // Exemplo para o futuro:
-    // if (currentUserPermissions!.hasRole('editor_projetos')) {
-    //   return '/home/projetos';
-    // }
-
-    // Fallback se não encontrar rota prioritária
-    return '/home/overview';
+    return false;
   }
 
+  /// Determina a rota inicial para o usuário com base em seus papéis.
+  String getInitialRouteForUser() {
+    if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
+      return '/';
+    }
+
+    final mainPageRoutes = {
+      'admin': '/home/dashboard',
+      'secretaria': '/home/dashboard',
+      'dij': '/home/dij',
+    };
+
+    for (var entry in mainPageRoutes.entries) {
+      final role = entry.key;
+      final route = entry.value;
+      if (currentUserPermissions!.hasRole(role)) {
+        return route;
+      }
+    }
+
+    // Fallback de segurança
+    return '/';
+  }
+
+  /// Desloga o usuário de todos os serviços.
   Future<void> signOut() async {
     currentUserPermissions = null;
     await _googleSignIn.signOut();
     await _auth.signOut();
-    notifyListeners();
+    // notifyListeners() foi removido daqui para evitar erros de renderização durante a navegação
   }
 }

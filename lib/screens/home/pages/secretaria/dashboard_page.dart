@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
-class OverviewPage extends StatelessWidget {
-  const OverviewPage({super.key});
+class DashboardPage extends StatelessWidget {
+  const DashboardPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    print("--- RECONSTRUINDO DashboardPage ---");
     return const Center(
       child: Text(
-        'Visão Geral',
+        'Dashboard Membros',
         style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
       ),
     );

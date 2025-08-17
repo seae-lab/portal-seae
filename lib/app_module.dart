@@ -1,10 +1,12 @@
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/home/home_screen.dart';
-import 'package:projetos/screens/home/pages/dij_page.dart';
-import 'package:projetos/screens/home/pages/overview_page.dart';
-import 'package:projetos/screens/home/pages/users_page.dart'; // Crie este arquivo
+import 'package:projetos/screens/home/pages/dij/dij_page.dart';
+import 'package:projetos/screens/home/pages/secretaria/dashboard_page.dart';
+import 'package:projetos/screens/home/pages/secretaria/gestao_membros_page.dart';
+import 'package:projetos/screens/home/pages/secretaria/relatorios_membros_page.dart';
 import 'package:projetos/screens/login_screen.dart';
 import 'package:projetos/services/auth_service.dart';
+import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
 import 'guards/role_guard.dart';
 
@@ -14,6 +16,7 @@ class AppModule extends Module {
   @override
   void binds(i) {
     i.addSingleton(AuthService.new);
+    i.addSingleton(CadastroService.new);
   }
 
   @override
@@ -24,15 +27,22 @@ class AppModule extends Module {
         child: (context) => const HomeScreen(),
         guards: [AuthGuard()],
         children: [
+
           // NOMES DOS PAPÉIS ATUALIZADOS NO GUARD
-          ChildRoute('/overview', child: (context) => const OverviewPage(), guards: [
+          //SECRETARIA
+          ChildRoute('/dashboard', child: (context) => const DashboardPage(), guards: [
             RoleGuard(allowedRoles: ['admin'])
           ]),
 
-          ChildRoute('/users', child: (context) => const UsersPage(), guards: [
+          ChildRoute('/gestao_membros', child: (context) => const GestaoMembrosPage(), guards: [
             RoleGuard(allowedRoles: ['admin'])
           ]),
 
+          ChildRoute('/relatorios_membros', child: (context) => const RelatoriosMembrosPage(), guards: [
+            RoleGuard(allowedRoles: ['admin'])
+          ]),
+
+          //DIJ
           ChildRoute('/dij', child: (context) => const DijPage(), guards: [
             // Agora 'admin' ou 'dij' podem acessar
             RoleGuard(allowedRoles: ['admin', 'dij'])

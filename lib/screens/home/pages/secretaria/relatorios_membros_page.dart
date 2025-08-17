@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-class UsersPage extends StatelessWidget {
-  const UsersPage({super.key});
+class RelatoriosMembrosPage extends StatelessWidget {
+  const RelatoriosMembrosPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return const Center(
       child: Text(
-        'Gerenciamento de Usuários',
+        'Relatórios',
         style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
       ),
     );
