@@ -44,7 +44,6 @@ class AppModule extends Module {
 
           //DIJ
           ChildRoute('/dij', child: (context) => const DijPage(), guards: [
-            // Agora 'admin' ou 'dij' podem acessar
             RoleGuard(allowedRoles: ['admin', 'dij'])
           ]),
         ]);
