@@ -20,14 +20,13 @@ class Membro {
   bool mediunidadeOstensiva;
   bool novoSocio;
   int situacaoSEAE;
-  String tipoMediunidade;
+  List<String> tiposMediunidade; // CAMPO ATUALIZADO DE String PARA List<String>
   bool transfAutomatica;
 
   Membro({
     required this.id,
     required this.nome,
     this.foto = '',
-    // Torna os parâmetros de coleção anuláveis para forçar a inicialização correta
     List<String>? atividades,
     this.atualizacao = false,
     this.atualizacaoCD = '',
@@ -43,13 +42,12 @@ class Membro {
     this.mediunidadeOstensiva = false,
     this.novoSocio = false,
     this.situacaoSEAE = 0,
-    this.tipoMediunidade = '',
+    List<String>? tiposMediunidade, // PARÂMETRO ATUALIZADO
     this.transfAutomatica = false,
-  })  // Usa o corpo do construtor para garantir que as coleções sejam sempre modificáveis
-      : this.atividades = atividades ?? [],
-        this.contribuicao = contribuicao ?? {};
+  })  : this.atividades = atividades ?? [],
+        this.contribuicao = contribuicao ?? {},
+        this.tiposMediunidade = tiposMediunidade ?? []; // INICIALIZAÇÃO ATUALIZADA
 
-  /// Construtor de fábrica para criar uma instância de Membro a partir de um documento do Firestore.
   factory Membro.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Membro(
@@ -71,12 +69,11 @@ class Membro {
       mediunidadeOstensiva: data['mediunidade_ostensiva'] ?? false,
       novoSocio: data['novo_socio'] ?? false,
       situacaoSEAE: data['situacao_SEAE'] ?? 0,
-      tipoMediunidade: data['tipo_mediunidade'] ?? '',
+      tiposMediunidade: List<String>.from(data['tipos_mediunidade'] ?? []), // LÓGICA ATUALIZADA
       transfAutomatica: data['transf_automatica'] ?? false,
     );
   }
 
-  /// Converte o objeto Membro de volta para um mapa, pronto para ser salvo no Firestore.
   Map<String, dynamic> toFirestore() {
     return {
       'nome': nome,
@@ -96,7 +93,7 @@ class Membro {
       'mediunidade_ostensiva': mediunidadeOstensiva,
       'novo_socio': novoSocio,
       'situacao_SEAE': situacaoSEAE,
-      'tipo_mediunidade': tipoMediunidade,
+      'tipos_mediunidade': tiposMediunidade, // CAMPO ATUALIZADO
       'transf_automatica': transfAutomatica,
     };
   }

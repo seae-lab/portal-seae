@@ -4,6 +4,7 @@ class DadosPessoais {
   String celular;
   String cep;
   String cidade;
+  String complemento; // NOVO CAMPO
   String cpf;
   String dataNascimento;
   String email;
@@ -25,6 +26,7 @@ class DadosPessoais {
     this.celular = '',
     this.cep = '',
     this.cidade = '',
+    this.complemento = '', // NOVO CAMPO
     this.cpf = '',
     this.dataNascimento = '',
     this.email = '',
@@ -48,6 +50,7 @@ class DadosPessoais {
       celular: data['celular'] ?? '',
       cep: data['cep'] ?? '',
       cidade: data['cidade'] ?? '',
+      complemento: data['complemento'] ?? '', // NOVO CAMPO
       cpf: data['cpf'] ?? '',
       dataNascimento: data['data_nascimento'] ?? '',
       email: data['e-mail'] ?? '',
@@ -72,6 +75,7 @@ class DadosPessoais {
       'celular': celular,
       'cep': cep,
       'cidade': cidade,
+      'complemento': complemento, // NOVO CAMPO
       'cpf': cpf,
       'data_nascimento': dataNascimento,
       'e-mail': email,

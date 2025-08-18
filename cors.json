@@ -1,7 +1,8 @@
 [
   {
-    "origin": ["https://portal-seae.web.app"],
-    "method": ["GET"],
+    "origin": ["https://portal-seae.web.app", "http://localhost:53241"],
+    "method": ["GET", "PUT", "POST"],
+    "responseHeader": ["Content-Type", "access-control-allow-origin"],
     "maxAgeSeconds": 3600
   }
 ]
