@@ -347,43 +347,31 @@ class MemberListItem extends StatelessWidget {
           membro.foto.isNotEmpty ? NetworkImage(membro.foto) : null,
           child: membro.foto.isEmpty ? const Icon(Icons.person) : null,
         ),
-        title: Row(
+        // MODIFICADO: Nome do membro no título
+        title: Text(membro.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
+        // MODIFICADO: Status movidos para o subtítulo com um Wrap para responsividade
+        subtitle: Wrap(
+          spacing: 8.0, // Espaço horizontal entre os itens
+          runSpacing: 4.0, // Espaço vertical quando quebra a linha
           children: [
-            Expanded(
-                child: Text(membro.nome,
-                    style: const TextStyle(fontWeight: FontWeight.bold))),
-            if (isMembroInativo) ...[
+            if (isMembroInativo)
+              Text(situacaoNome, style: const TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold))
+            else ...[
               if (situacaoNome.isNotEmpty)
-                Text(situacaoNome,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold)),
-            ] else ...[
-              if (situacaoNome.isNotEmpty)
-                Text(situacaoNome,
-                    style:
-                    const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-              if (situacaoNome.isNotEmpty)
-                const Text(' | ',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(situacaoNome, style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
               if (activities.isNotEmpty)
-                Text(activities,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              if (activities.isNotEmpty)
-                const Text(' | ',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(contributionStatus.text,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: contributionStatus.color)),
-            ],
-            if (canEdit)
-              IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20),
-                  onPressed: onEdit),
+                Text(activities, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(contributionStatus.text, style: TextStyle(fontSize: 12, color: contributionStatus.color)),
+            ]
           ],
         ),
+        // MODIFICADO: Botão de edição movido para o trailing
+        trailing: canEdit
+            ? IconButton(
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: onEdit,
+        )
+            : null,
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
