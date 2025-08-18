@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dados_pessoais.dart';
 
 class Membro {
-  String id;
+  // O ID agora pode ser nulo, pois será gerado pelo Firestore para novos membros.
+  String? id;
   String nome;
   String foto;
   List<String> atividades;
@@ -20,11 +21,12 @@ class Membro {
   bool mediunidadeOstensiva;
   bool novoSocio;
   int situacaoSEAE;
-  List<String> tiposMediunidade; // CAMPO ATUALIZADO DE String PARA List<String>
+  List<String> tiposMediunidade;
   bool transfAutomatica;
 
   Membro({
-    required this.id,
+    // ID não é mais obrigatório no construtor.
+    this.id,
     required this.nome,
     this.foto = '',
     List<String>? atividades,
@@ -42,11 +44,11 @@ class Membro {
     this.mediunidadeOstensiva = false,
     this.novoSocio = false,
     this.situacaoSEAE = 0,
-    List<String>? tiposMediunidade, // PARÂMETRO ATUALIZADO
+    List<String>? tiposMediunidade,
     this.transfAutomatica = false,
   })  : this.atividades = atividades ?? [],
         this.contribuicao = contribuicao ?? {},
-        this.tiposMediunidade = tiposMediunidade ?? []; // INICIALIZAÇÃO ATUALIZADA
+        this.tiposMediunidade = tiposMediunidade ?? [];
 
   factory Membro.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
@@ -69,7 +71,7 @@ class Membro {
       mediunidadeOstensiva: data['mediunidade_ostensiva'] ?? false,
       novoSocio: data['novo_socio'] ?? false,
       situacaoSEAE: data['situacao_SEAE'] ?? 0,
-      tiposMediunidade: List<String>.from(data['tipos_mediunidade'] ?? []), // LÓGICA ATUALIZADA
+      tiposMediunidade: List<String>.from(data['tipos_mediunidade'] ?? []),
       transfAutomatica: data['transf_automatica'] ?? false,
     );
   }
@@ -93,7 +95,7 @@ class Membro {
       'mediunidade_ostensiva': mediunidadeOstensiva,
       'novo_socio': novoSocio,
       'situacao_SEAE': situacaoSEAE,
-      'tipos_mediunidade': tiposMediunidade, // CAMPO ATUALIZADO
+      'tipos_mediunidade': tiposMediunidade,
       'transf_automatica': transfAutomatica,
     };
   }

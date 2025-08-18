@@ -8,7 +8,8 @@ import 'package:projetos/screens/models/membro.dart';
 class CadastroService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference get _membrosCollection =>
+  // MODIFICADO: Getter agora é público
+  CollectionReference get membrosCollection =>
       _firestore.collection('bases/base_cadastral/membros');
 
   DocumentReference get _departamentosDoc =>
@@ -20,7 +21,6 @@ class CadastroService {
   DocumentReference get _contribuicoesDoc =>
       _firestore.doc('bases/base_ano_contribuicoes');
 
-  // NOVO: Referência para o documento de tipos de mediunidade
   DocumentReference get _tiposMediunidadeDoc =>
       _firestore.doc('bases/base_tipos_mediunidade');
 
@@ -44,45 +44,36 @@ class CadastroService {
   }
 
   Stream<List<Membro>> getMembros() {
-    return _membrosCollection.snapshots().map((snapshot) {
+    return membrosCollection.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) => Membro.fromFirestore(doc)).toList();
     });
   }
 
   Future<List<String>> getDepartamentos() async {
     final snapshot = await _departamentosDoc.get();
-    if (!snapshot.exists || snapshot.data() == null) {
-      return [];
-    }
+    if (!snapshot.exists || snapshot.data() == null) return [];
     final data = snapshot.data() as Map<String, dynamic>;
     return data.keys.toList();
   }
 
   Future<Map<String, String>> getSituacoes() async {
     final snapshot = await _situacoesDoc.get();
-    if (!snapshot.exists || snapshot.data() == null) {
-      return {};
-    }
+    if (!snapshot.exists || snapshot.data() == null) return {};
     final data = snapshot.data() as Map<String, dynamic>;
     return data.map((key, value) => MapEntry(key, value.toString()));
   }
 
   Future<List<String>> getAnosContribuicao() async {
     final snapshot = await _contribuicoesDoc.get();
-    if (!snapshot.exists || snapshot.data() == null) {
-      return [];
-    }
+    if (!snapshot.exists || snapshot.data() == null) return [];
     final data = snapshot.data() as Map<String, dynamic>;
     final anos = List<dynamic>.from(data['contribuicoes'] ?? []);
     return anos.map((ano) => ano.toString()).toList();
   }
 
-  /// NOVO MÉTODO: Busca a lista de tipos de mediunidade.
   Future<List<String>> getTiposMediunidade() async {
     final snapshot = await _tiposMediunidadeDoc.get();
-    if (!snapshot.exists || snapshot.data() == null) {
-      return [];
-    }
+    if (!snapshot.exists || snapshot.data() == null) return [];
     final data = snapshot.data() as Map<String, dynamic>;
     final mediunidades = List<dynamic>.from(data['mediunidades'] ?? []);
     return mediunidades.map((tipo) => tipo.toString()).toList();
@@ -99,16 +90,19 @@ class CadastroService {
       final snapshot = await uploadTask.whenComplete(() => {});
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
-      print('Erro no upload da imagem: $e');
       rethrow;
     }
   }
 
   Future<void> saveMembro(Membro membro) {
-    return _membrosCollection.doc(membro.id).set(membro.toFirestore());
+    if (membro.id == null || membro.id!.isEmpty) {
+      return membrosCollection.add(membro.toFirestore());
+    } else {
+      return membrosCollection.doc(membro.id).set(membro.toFirestore());
+    }
   }
 
   Future<void> deleteMembro(String id) {
-    return _membrosCollection.doc(id).delete();
+    return membrosCollection.doc(id).delete();
   }
 }

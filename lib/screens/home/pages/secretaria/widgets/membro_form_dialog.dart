@@ -6,6 +6,7 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:projetos/screens/models/dados_pessoais.dart';
 import 'package:projetos/screens/models/membro.dart';
 import 'package:projetos/services/cadastro_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MembroFormDialog extends StatefulWidget {
   final Membro? membro;
@@ -25,7 +26,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   Uint8List? _newImageBytes;
 
   final List<bool> _expansionPanelOpenState = [true, true];
-
   List<String> _allDepartamentos = [];
   Map<String, String> _allSituacoes = {};
   List<String> _allAnosContribuicao = [];
@@ -36,6 +36,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     'Ensino Fundamental - Completo',
     'Ensino Médio - Incompleto',
     'Ensino Médio - Completo',
+    'Magistério - Completo',
     'Ensino Superior - Incompleto',
     'Ensino Superior - Completo',
     'Mestrado - Incompleto',
@@ -43,21 +44,18 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     'Doutorado - Incompleto',
     'Doutorado - Completo'
   ];
-  final List<String> _estadosCivis = ['Solteiro', 'Casado', 'Divorciado', 'Viúvo', 'Separado'];
+  final List<String> _estadosCivis = ['Solteiro (a)', 'Casado (a)', 'Divorciado (a)', 'Viúvo (a)', 'Separado (a)'];
   bool _isLoadingBases = true;
-
   final _cepController = TextEditingController();
   final _enderecoController = TextEditingController();
   final _bairroController = TextEditingController();
   final _cidadeController = TextEditingController();
   final _ufController = TextEditingController();
-
   final _cepMask = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
   final _celularMask = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _telefoneMask = MaskTextInputFormatter(mask: '(##) ####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cpfMask = MaskTextInputFormatter(mask: '###.###.###-##', filter: {"#": RegExp(r'[0-9]')});
   final _dataMask = MaskTextInputFormatter(mask: '##/##/####', filter: {"#": RegExp(r'[0-9]')});
-
 
   @override
   void initState() {
@@ -86,8 +84,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
         mediunidadeOstensiva: m.mediunidadeOstensiva,
         novoSocio: m.novoSocio,
         situacaoSEAE: m.situacaoSEAE,
-        // CORREÇÃO: Garante que a lista não seja nula
-        tiposMediunidade: List<String>.from(m.tiposMediunidade ?? []),
+        tiposMediunidade: List<String>.from(m.tiposMediunidade),
         transfAutomatica: m.transfAutomatica,
       );
       _cepController.text = _formData.dadosPessoais.cep;
@@ -97,12 +94,8 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       _ufController.text = _formData.dadosPessoais.naturalidadeUF;
     } else {
       _formData = Membro(
-        id: '',
         nome: '',
         dadosPessoais: DadosPessoais(),
-        atividades: [],
-        contribuicao: {},
-        tiposMediunidade: [], // Garante que a lista seja inicializada
       );
     }
 
@@ -181,14 +174,23 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       setState(() => _isSaving = true);
+
       try {
+        if (_isNewMember) {
+          // CORRIGIDO: Usa a collection pública
+          final DocumentReference docRef = await _cadastroService.membrosCollection.add(_formData.toFirestore());
+          _formData.id = docRef.id;
+        }
+
         if (_newImageBytes != null) {
           _formData.foto = await _cadastroService.uploadProfileImage(
-            memberId: _formData.id,
+            memberId: _formData.id!,
             fileBytes: _newImageBytes!,
           );
         }
+
         await _cadastroService.saveMembro(_formData);
+
         if (mounted) Navigator.of(context).pop();
       } catch (e) {
         if (mounted) {
@@ -276,13 +278,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_isNewMember)
-                _buildTextField(
-                    label: 'ID (Ex: 2, 3...)',
-                    initialValue: _formData.id,
-                    onSaved: (v) => _formData.id = v!,
-                    isNumeric: true,
-                    isRequired: true),
               _buildTextField(
                   label: 'Nome Completo',
                   initialValue: _formData.nome,
@@ -609,7 +604,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   }
 }
 
-// WIDGET AUXILIAR PARA O DIÁLOGO DE SELEÇÃO MÚLTIPLA
 class MultiSelectDialog extends StatefulWidget {
   final List<String> items;
   final List<String> initialSelectedItems;
