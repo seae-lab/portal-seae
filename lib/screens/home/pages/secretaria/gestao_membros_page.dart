@@ -5,7 +5,6 @@ import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'widgets/membro_form_dialog.dart';
 
-// Classe auxiliar para carregar dados necessários para a página
 class _PageDependencies {
   final Map<String, String> situacoes;
   final List<String> anosContribuicao;
@@ -29,31 +28,27 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   final AuthService _authService = Modular.get<AuthService>();
   final TextEditingController _searchController = TextEditingController();
   String _searchTerm = '';
-
-  // Estados para os novos filtros
   String? _selectedStatusId;
   String? _selectedDepartment;
   String? _selectedContributionYear;
-
   Future<_PageDependencies>? _dependenciesFuture;
 
   @override
   void initState() {
     super.initState();
     _dependenciesFuture ??= _loadDependencies();
-    _searchController
-        .addListener(() => setState(() => _searchTerm = _searchController.text));
+    _searchController.addListener(() => setState(() => _searchTerm = _searchController.text));
   }
 
   Future<_PageDependencies> _loadDependencies() async {
     final results = await Future.wait([
       _cadastroService.getSituacoes(),
       _cadastroService.getAnosContribuicao(),
-      _cadastroService.getDepartamentos(), // Carrega os departamentos
+      _cadastroService.getDepartamentos(),
     ]);
     return _PageDependencies(
       situacoes: results[0] as Map<String, String>,
-      anosContribuicao: results[1] as List<String>,
+      anosContribuicao: (results[1] as List<String>)..sort(), // Garante ordem crescente
       departamentos: results[2] as List<String>,
     );
   }
@@ -67,14 +62,15 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   void _showMemberForm({Membro? membro}) {
     showDialog(
       context: context,
-      builder: (context) =>
-          Dialog.fullscreen(child: MembroFormDialog(membro: membro)),
-    );
+      builder: (context) => Dialog.fullscreen(child: MembroFormDialog(membro: membro)),
+    ).then((_) => setState(() {
+      _dependenciesFuture = _loadDependencies();
+    }));
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool canEdit = _authService.currentUserPermissions?.isAdmin ?? false;
+    final bool canEdit = _authService.currentUserPermissions?.hasRole('admin') ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -87,13 +83,10 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
           if (dependenciesSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (dependenciesSnapshot.hasError || !dependenciesSnapshot.hasData) {
-            return const Center(child: Text('Erro ao carregar dependências.'));
+            return Center(child: Text('Erro ao carregar dependências: ${dependenciesSnapshot.error}'));
           }
-
           final dependencies = dependenciesSnapshot.data!;
-
           return Column(
             children: [
               Padding(
@@ -103,20 +96,17 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                     TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Buscar por nome, atividade, ano, cidade...',
+                        hintText: 'Buscar por nome, CPF, e-mail...',
                         prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                         filled: true,
                         fillColor: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Filtros em uma linha para telas largas, empilhados para telas estreitas
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        if (constraints.maxWidth > 600) {
+                        if (constraints.maxWidth > 700) {
                           return Row(
                             children: [
                               Expanded(child: _buildStatusFilter(dependencies.situacoes)),
@@ -145,65 +135,40 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                 child: StreamBuilder<List<Membro>>(
                   stream: _cadastroService.getMembros(),
                   builder: (context, membrosSnapshot) {
-                    if (membrosSnapshot.connectionState ==
-                        ConnectionState.waiting) {
+                    if (membrosSnapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    if (!membrosSnapshot.hasData ||
-                        membrosSnapshot.data!.isEmpty) {
-                      return const Center(
-                          child: Text('Nenhum membro cadastrado.'));
+                    if (!membrosSnapshot.hasData || membrosSnapshot.data!.isEmpty) {
+                      return const Center(child: Text('Nenhum membro cadastrado.'));
                     }
+                    final filteredMembers = membrosSnapshot.data!.where((membro) {
+                      final statusMatch = _selectedStatusId == null || membro.situacaoSEAE.toString() == _selectedStatusId;
+                      final departmentMatch = _selectedDepartment == null || membro.atividades.contains(_selectedDepartment);
 
-                    final filteredMembers =
-                    membrosSnapshot.data!.where((membro) {
-                      final situacaoNome = dependencies.situacoes[membro.situacaoSEAE.toString()] ?? '';
-
-                      // Lógica de filtro combinada
-                      final statusMatch = _selectedStatusId == null ||
-                          membro.situacaoSEAE.toString() == _selectedStatusId;
-
-                      final departmentMatch = _selectedDepartment == null ||
-                          membro.atividades.contains(_selectedDepartment);
-
-                      final contributionMatch = _selectedContributionYear == null ||
-                          (membro.contribuicao[_selectedContributionYear] ?? false);
+                      final contributionMatch = () {
+                        if (_selectedContributionYear == null) {
+                          return true;
+                        }
+                        final anoData = membro.contribuicao[_selectedContributionYear];
+                        if (anoData is Map) {
+                          final mesesData = anoData['meses'];
+                          if (mesesData is Map) {
+                            return mesesData.values.any((pago) => pago == true);
+                          }
+                        }
+                        return false;
+                      }();
 
                       final searchTermMatch = _searchTerm.isEmpty ||
-                          membro.nome
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase()) ||
-                          situacaoNome
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase()) ||
-                          membro.atividades.any((a) => a
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase())) ||
-                          membro.contribuicao.keys
-                              .any((ano) => ano.contains(_searchTerm)) ||
-                          membro.tiposMediunidade.any((t) => t
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase())) ||
-                          membro.dadosPessoais.email
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase()) ||
-                          membro.dadosPessoais.cpf.contains(_searchTerm) ||
-                          membro.dadosPessoais.celular.contains(_searchTerm) ||
-                          membro.dadosPessoais.endereco
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase()) ||
-                          membro.dadosPessoais.bairro
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase()) ||
-                          membro.dadosPessoais.cidade
-                              .toLowerCase()
-                              .contains(_searchTerm.toLowerCase());
-
+                          membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                          membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                          membro.dadosPessoais.cpf.contains(_searchTerm);
                       return statusMatch && searchTermMatch && departmentMatch && contributionMatch;
                     }).toList();
-
                     filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
-
+                    if (filteredMembers.isEmpty) {
+                      return const Center(child: Text('Nenhum membro encontrado com os filtros aplicados.'));
+                    }
                     return ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       itemCount: filteredMembers.length,
@@ -214,8 +179,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                           onEdit: () => _showMemberForm(membro: membro),
                           canEdit: canEdit,
                           situacoes: dependencies.situacoes,
-                          allAnosContribuicao:
-                          dependencies.anosContribuicao,
+                          allAnosContribuicao: dependencies.anosContribuicao,
                         );
                       },
                     );
@@ -227,16 +191,11 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
         },
       ),
       floatingActionButton: canEdit
-          ? FloatingActionButton(
-        onPressed: () => _showMemberForm(),
-        tooltip: 'Adicionar Membro',
-        child: const Icon(Icons.add),
-      )
+          ? FloatingActionButton(onPressed: () => _showMemberForm(), tooltip: 'Adicionar Membro', child: const Icon(Icons.add))
           : null,
     );
   }
 
-  // WIDGETS DE FILTRO REUTILIZÁVEIS
   Widget _buildStatusFilter(Map<String, String> situacoes) {
     return DropdownButtonFormField<String>(
       value: _selectedStatusId,
@@ -245,9 +204,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       decoration: _filterDecoration(),
       items: [
         const DropdownMenuItem<String>(value: null, child: Text('Todas as Situações')),
-        ...situacoes.entries.map((entry) {
-          return DropdownMenuItem<String>(value: entry.key, child: Text(entry.value));
-        }).toList(),
+        ...situacoes.entries.map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value))).toList(),
       ],
       onChanged: (value) => setState(() => _selectedStatusId = value),
     );
@@ -261,9 +218,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       decoration: _filterDecoration(),
       items: [
         const DropdownMenuItem<String>(value: null, child: Text('Todos os Departamentos')),
-        ...departamentos.map((depto) {
-          return DropdownMenuItem<String>(value: depto, child: Text(depto));
-        }).toList(),
+        ...departamentos.map((depto) => DropdownMenuItem<String>(value: depto, child: Text(depto))).toList(),
       ],
       onChanged: (value) => setState(() => _selectedDepartment = value),
     );
@@ -277,9 +232,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       decoration: _filterDecoration(),
       items: [
         const DropdownMenuItem<String>(value: null, child: Text('Qualquer Ano')),
-        ...anos.map((ano) {
-          return DropdownMenuItem<String>(value: ano, child: Text('Contribuiu em $ano'));
-        }).toList(),
+        ...anos.map((ano) => DropdownMenuItem<String>(value: ano, child: Text('Contribuiu em $ano'))).toList(),
       ],
       onChanged: (value) => setState(() => _selectedContributionYear = value),
     );
@@ -289,10 +242,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     return InputDecoration(
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none,
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
     );
   }
@@ -319,16 +269,19 @@ class MemberListItem extends StatelessWidget {
     if (!isSocio) {
       return (text: 'Não Contribuinte', color: Colors.blue);
     }
-
     final int currentYear = DateTime.now().year;
     for (final yearStr in allAnosContribuicao) {
-      final year = int.parse(yearStr);
-      final bool isPaid = membro.contribuicao[yearStr] ?? false;
-      if (!isPaid && year < currentYear) {
-        return (text: 'Contribuição em Atraso', color: Colors.orange);
+      final year = int.tryParse(yearStr) ?? 0;
+      if (year < currentYear) {
+        final anoData = membro.contribuicao[yearStr];
+        if (anoData is Map && (anoData['quitado'] == null || anoData['quitado'] == false)) {
+          final mesesData = anoData['meses'] as Map<String, dynamic>?;
+          if (mesesData != null && mesesData.values.any((pago) => !pago)) {
+            return (text: 'Contribuição em Atraso', color: Colors.orange);
+          }
+        }
       }
     }
-
     return (text: 'Contribuinte', color: Colors.green);
   }
 
@@ -336,42 +289,45 @@ class MemberListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final activities = membro.atividades.join(', ');
     final contributionStatus = _getContributionStatus();
-    final situacaoNome = situacoes[membro.situacaoSEAE.toString()] ?? '';
+    final situacaoNome = situacoes[membro.situacaoSEAE.toString()] ?? 'Não definida';
     final bool isMembroInativo = [5, 6, 7].contains(membro.situacaoSEAE);
+    final mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    final mesesLowerCase = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundImage:
-          membro.foto.isNotEmpty ? NetworkImage(membro.foto) : null,
+          backgroundImage: membro.foto.isNotEmpty ? NetworkImage(membro.foto) : null,
           child: membro.foto.isEmpty ? const Icon(Icons.person) : null,
         ),
-        // MODIFICADO: Nome do membro no título
-        title: Text(membro.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-        // MODIFICADO: Status movidos para o subtítulo com um Wrap para responsividade
-        subtitle: Wrap(
-          spacing: 8.0, // Espaço horizontal entre os itens
-          runSpacing: 4.0, // Espaço vertical quando quebra a linha
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (isMembroInativo)
-              Text(situacaoNome, style: const TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold))
-            else ...[
-              if (situacaoNome.isNotEmpty)
-                Text(situacaoNome, style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-              if (activities.isNotEmpty)
-                Text(activities, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(contributionStatus.text, style: TextStyle(fontSize: 12, color: contributionStatus.color)),
-            ]
+            Text(
+              membro.nome,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 4.0,
+              children: [
+                if (isMembroInativo)
+                  Text(situacaoNome, style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold))
+                else ...[
+                  if (situacaoNome.isNotEmpty)
+                    Text(situacaoNome, style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                  if (activities.isNotEmpty)
+                    Text(activities, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(contributionStatus.text, style: TextStyle(fontSize: 11, color: contributionStatus.color)),
+                ]
+              ],
+            ),
           ],
         ),
-        // MODIFICADO: Botão de edição movido para o trailing
-        trailing: canEdit
-            ? IconButton(
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: onEdit,
-        )
-            : null,
+        trailing: canEdit ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: onEdit) : null,
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -383,58 +339,65 @@ class MemberListItem extends StatelessWidget {
                   _buildSectionTitle('Dados Pessoais'),
                   _buildDetailRow('Email:', membro.dadosPessoais.email),
                   _buildDetailRow('Celular:', membro.dadosPessoais.celular),
-                  _buildDetailRow(
-                      'Endereço:',
-                      '${membro.dadosPessoais.endereco}, ${membro.dadosPessoais.bairro}, ${membro.dadosPessoais.cidade}'),
-                  _buildDetailRow(
-                      'Data de Nasc:', membro.dadosPessoais.dataNascimento),
+                  _buildDetailRow('Endereço:', '${membro.dadosPessoais.endereco}, ${membro.dadosPessoais.bairro}, ${membro.dadosPessoais.cidade}'),
+                  _buildDetailRow('Data de Nasc:', membro.dadosPessoais.dataNascimento),
                   _buildDetailRow('CPF:', membro.dadosPessoais.cpf),
                   const Divider(height: 20),
                   _buildSectionTitle('Situação Cadastral'),
                   _buildDetailRow('Data da Proposta:', membro.dataProposta),
                   _buildDetailRow('Aprovação CD:', membro.dataAprovacaoCD),
-                  _buildDetailRow(
-                      'Última Atualização:', membro.dataAtualizacao),
-                  _buildDetailRow(
-                      'Frequenta desde:',
-                      membro.frequentaSeaeDesde > 0
-                          ? membro.frequentaSeaeDesde.toString()
-                          : 'N/A'),
-                  _buildDetailRow('Mediunidade Ostensiva:',
-                      membro.mediunidadeOstensiva ? 'Sim' : 'Não'),
+                  _buildDetailRow('Última Atualização:', membro.dataAtualizacao),
+                  _buildDetailRow('Frequenta desde:', membro.frequentaSeaeDesde > 0 ? membro.frequentaSeaeDesde.toString() : 'N/A'),
+                  _buildDetailRow('Mediunidade Ostensiva:', membro.mediunidadeOstensiva ? 'Sim' : 'Não'),
                   const Divider(height: 20),
                   _buildSectionTitle('Contribuições'),
                   if (allAnosContribuicao.isEmpty)
                     const Text('Nenhum ano de contribuição configurado.')
                   else
                     ...allAnosContribuicao.map((year) {
-                      final int currentYear = DateTime.now().year;
-                      final int anoContribuicao = int.parse(year);
-                      final bool isPago = membro.contribuicao[year] ?? false;
+                      final anoData = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
+                      final isQuitado = anoData['quitado'] as bool? ?? false;
 
-                      String statusText;
-                      Color statusColor;
-
-                      if (isPago) {
-                        statusText = 'Pago';
-                        statusColor = Colors.green;
-                      } else {
-                        final bool isSocio = [3, 4].contains(membro.situacaoSEAE);
-                        if (isSocio &&
-                            !isMembroInativo &&
-                            anoContribuicao < currentYear) {
-                          statusText = 'Atrasado';
-                          statusColor = Colors.red;
-                        } else {
-                          statusText = 'Pendente';
-                          statusColor = Colors.grey;
-                        }
-                      }
-
-                      return _buildDetailRow(
-                        '$year:',
-                        statusText,
-                        valueColor: statusColor,
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(year, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                if(isQuitado)
+                                  const Chip(label: Text('Ano Quitado'), backgroundColor: Colors.lightGreenAccent, padding: EdgeInsets.zero)
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: List.generate(12, (index) {
+                                  final mesAbrev = mesesAbrev[index];
+                                  final mesKey = mesesLowerCase[index];
+                                  final isPaid = (anoData['meses'] as Map<String, dynamic>?)?[mesKey] ?? false;
+                                  return Tooltip(
+                                    message: isPaid ? 'Pago' : 'Pendente',
+                                    child: Container(
+                                      width: 28,
+                                      margin: const EdgeInsets.only(right: 4),
+                                      padding: const EdgeInsets.symmetric(vertical: 4),
+                                      decoration: BoxDecoration(
+                                          color: isPaid ? Colors.green[100] : Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: isPaid ? Colors.green : Colors.grey.shade300)
+                                      ),
+                                      child: Center(child: Text(mesAbrev, style: TextStyle(fontSize: 10, color: isPaid ? Colors.green[800] : Colors.grey[600]))),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            )
+                          ],
+                        ),
                       );
                     }).toList(),
                 ],
@@ -447,12 +410,8 @@ class MemberListItem extends StatelessWidget {
   }
 
   Widget _buildSectionTitle(String title) => Padding(
-    padding: const EdgeInsets.only(bottom: 4.0),
-    child: Text(title,
-        style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: Colors.blueAccent)),
+    padding: const EdgeInsets.only(bottom: 8.0),
+    child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent)),
   );
 
   Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
@@ -460,11 +419,12 @@ class MemberListItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: Text.rich(
         TextSpan(
-          style: const TextStyle(fontSize: 14),
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
           children: [
             TextSpan(
-                text: '$label ',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+              text: '$label ',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             TextSpan(
               text: value.isNotEmpty ? value : "N/A",
               style: TextStyle(color: valueColor),

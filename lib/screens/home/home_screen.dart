@@ -14,19 +14,15 @@ class HomeScreen extends StatelessWidget {
         final isDesktop = constraints.maxWidth > 700;
 
         return Scaffold(
-          // No desktop, não precisamos do AppBar, pois o menu é fixo
           appBar: isDesktop
               ? null
               : AppBar(
             title: const Text('Painel Admin'),
           ),
-          // No mobile, o menu vira uma "gaveta" (drawer)
           drawer: isDesktop ? null : const SideMenuWidget(),
           body: Row(
             children: [
-              // Se for desktop, mostra o menu lateral fixo
               if (isDesktop) const SideMenuWidget(),
-              // O RouterOutlet é a área onde as páginas filhas serão renderizadas
               const Expanded(
                 child: RouterOutlet(),
               ),

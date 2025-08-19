@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dados_pessoais.dart';
 
 class Membro {
-  // O ID agora pode ser nulo, pois será gerado pelo Firestore para novos membros.
   String? id;
   String nome;
   String foto;
@@ -10,7 +9,8 @@ class Membro {
   bool atualizacao;
   String atualizacaoCD;
   String atualizacaoCF;
-  Map<String, bool> contribuicao;
+  // MODIFICADO: A estrutura agora é um mapa dinâmico para suportar o status 'quitado'
+  Map<String, dynamic> contribuicao;
   DadosPessoais dadosPessoais;
   String dataAprovacaoCD;
   String dataAtualizacao;
@@ -25,7 +25,6 @@ class Membro {
   bool transfAutomatica;
 
   Membro({
-    // ID não é mais obrigatório no construtor.
     this.id,
     required this.nome,
     this.foto = '',
@@ -33,7 +32,7 @@ class Membro {
     this.atualizacao = false,
     this.atualizacaoCD = '',
     this.atualizacaoCF = '',
-    Map<String, bool>? contribuicao,
+    Map<String, dynamic>? contribuicao,
     required this.dadosPessoais,
     this.dataAprovacaoCD = '',
     this.dataAtualizacao = '',
@@ -46,12 +45,32 @@ class Membro {
     this.situacaoSEAE = 0,
     List<String>? tiposMediunidade,
     this.transfAutomatica = false,
-  })  : this.atividades = atividades ?? [],
-        this.contribuicao = contribuicao ?? {},
-        this.tiposMediunidade = tiposMediunidade ?? [];
+  })  : atividades = atividades ?? [],
+        contribuicao = contribuicao ?? {},
+        tiposMediunidade = tiposMediunidade ?? [];
 
   factory Membro.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final rawContribuicao = data['contribuicao'] as Map<String, dynamic>? ?? {};
+    final Map<String, dynamic> contribuicaoMap = {};
+    const meses = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+    rawContribuicao.forEach((year, value) {
+      if (value is Map) {
+        // Novo formato: {'2024': {'quitado': bool, 'meses': { ... }}}
+        contribuicaoMap[year] = {
+          'quitado': value['quitado'] ?? false,
+          'meses': Map<String, bool>.from(value['meses']?.cast<String, bool>() ?? {}),
+        };
+      } else if (value is bool) {
+        // Formato antigo: {'2024': true} -> converte para o novo formato
+        contribuicaoMap[year] = {
+          'quitado': value,
+          'meses': { for (var m in meses) m: value },
+        };
+      }
+    });
+
     return Membro(
       id: doc.id,
       nome: data['nome'] ?? '',
@@ -60,7 +79,7 @@ class Membro {
       atualizacao: data['atualizacao'] ?? false,
       atualizacaoCD: data['atualizacao_CD'] ?? '',
       atualizacaoCF: data['atualizacao_CF'] ?? '',
-      contribuicao: Map<String, bool>.from(data['contribuicao'] ?? {}),
+      contribuicao: contribuicaoMap,
       dadosPessoais: DadosPessoais.fromMap(data['dados_pessoais'] ?? {}),
       dataAprovacaoCD: data['data_aprovacao_CD'] ?? '',
       dataAtualizacao: data['data_atualizacao'] ?? '',
