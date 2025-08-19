@@ -22,9 +22,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<DashboardData> _loadDashboardData() async {
-    // Busca todos os dados em paralelo
     final results = await Future.wait([
-      _cadastroService.getMembros().first, // Pega o primeiro evento do stream (a lista atual)
+      _cadastroService.getMembros().first,
       _cadastroService.getSituacoes(),
       _cadastroService.getDepartamentos(),
     ]);
@@ -32,7 +31,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return DashboardData(
       membros: results[0] as List<Membro>,
       situacoes: results[1] as Map<String, String>,
-      departamentos: (results[2] as List<String>).toSet().toList(), // Garante departamentos únicos
+      departamentos: (results[2] as List<String>).toSet().toList(),
     );
   }
 
@@ -70,13 +69,11 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 Text(
                   'Visão Geral - Total de ${totalMembros} membros',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black87),
                 ),
                 const SizedBox(height: 24),
-                // MODIFICADO: Layout responsivo para os gráficos
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    // Para telas largas, mostra os 2 primeiros gráficos lado a lado
                     if (constraints.maxWidth > 900) {
                       return Column(
                         children: [
@@ -93,7 +90,6 @@ class _DashboardPageState extends State<DashboardPage> {
                         ],
                       );
                     }
-                    // Para telas estreitas, mostra um gráfico por linha
                     return Column(
                       children: [
                         _buildSituacaoChart(data.membros, data.situacoes),
@@ -115,16 +111,17 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildChartCard({required String title, required Widget chart}) {
     return Card(
-      elevation: 4,
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Colors.white,
       child: Container(
-        padding: const EdgeInsets.all(16),
-        height: 350,
+        padding: const EdgeInsets.all(20),
+        height: 400,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+            const SizedBox(height: 24),
             Expanded(child: chart),
           ],
         ),
@@ -132,7 +129,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // Gráfico de Barras para Situação
   Widget _buildSituacaoChart(List<Membro> membros, Map<String, String> situacoes) {
     final Map<String, int> situacaoCount = {};
     for (var membro in membros) {
@@ -146,7 +142,7 @@ class _DashboardPageState extends State<DashboardPage> {
       chart: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: situacaoCount.values.fold(0, (max, v) => v > max ? v : max).toDouble() + 2,
+          maxY: situacaoCount.values.fold(0, (max, v) => v > max ? v : max).toDouble() * 1.2,
           barGroups: situacaoCount.entries.map((entry) {
             final index = situacaoCount.keys.toList().indexOf(entry.key);
             return BarChartGroupData(
@@ -154,9 +150,13 @@ class _DashboardPageState extends State<DashboardPage> {
               barRods: [
                 BarChartRodData(
                   toY: entry.value.toDouble(),
-                  color: Colors.orange,
-                  width: 16,
-                  borderRadius: BorderRadius.zero,
+                  width: 18,
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4)),
+                  gradient: LinearGradient(
+                    colors: [Colors.blue.shade400, Colors.blue.shade700],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
                 ),
               ],
             );
@@ -169,27 +169,26 @@ class _DashboardPageState extends State<DashboardPage> {
                   final index = value.toInt();
                   if (index >= 0 && index < situacaoCount.keys.length) {
                     return Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Text(situacaoCount.keys.elementAt(index), style: const TextStyle(fontSize: 10)),
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(situacaoCount.keys.elementAt(index), style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     );
                   }
                   return const Text('');
                 },
-                reservedSize: 30,
+                reservedSize: 32,
               ),
             ),
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, interval: 1)),
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32, interval: (situacaoCount.values.fold(0, (max, v) => v > max ? v : max) / 5).ceilToDouble())),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           borderData: FlBorderData(show: false),
-          gridData: const FlGridData(show: true, drawVerticalLine: false),
+          gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: (situacaoCount.values.fold(0, (max, v) => v > max ? v : max) / 5).ceilToDouble(), getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1)),
         ),
       ),
     );
   }
 
-  // Gráfico de Pizza para Departamento
   Widget _buildDepartamentoChart(List<Membro> membros, List<String> departamentos) {
     final Map<String, int> deptoCount = { for (var d in departamentos) d : 0 };
     for (var membro in membros) {
@@ -200,15 +199,16 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
     deptoCount.removeWhere((key, value) => value == 0);
+    final List<Color> colors = [Colors.cyan, Colors.amber, Colors.pink, Colors.green, Colors.purple, Colors.orange];
 
     final List<PieChartSectionData> sections = deptoCount.entries.map((entry) {
       final index = deptoCount.keys.toList().indexOf(entry.key);
       return PieChartSectionData(
         value: entry.value.toDouble(),
         title: '${entry.value}',
-        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-        radius: 100,
-        color: Colors.primaries[index % Colors.primaries.length],
+        titleStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, shadows: [Shadow(color: Colors.black26, blurRadius: 2)]),
+        radius: 110,
+        color: colors[index % colors.length],
       );
     }).toList();
 
@@ -216,50 +216,60 @@ class _DashboardPageState extends State<DashboardPage> {
       title: 'Membros por Departamento',
       chart: Row(
         children: [
-          Expanded( // Gráfico de pizza na esquerda
+          Expanded(
+            flex: 2,
             child: PieChart(
               PieChartData(
                 sections: sections,
                 borderData: FlBorderData(show: false),
                 sectionsSpace: 2,
-                centerSpaceRadius: 40,
+                centerSpaceRadius: 45,
               ),
             ),
           ),
-          Column( // Legenda na direita
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: deptoCount.keys.map((name) {
-              final index = deptoCount.keys.toList().indexOf(name);
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Row(children: [
-                  Container(width: 8, height: 8, color: Colors.primaries[index % Colors.primaries.length]),
-                  const SizedBox(width: 4),
-                  Text(name, style: const TextStyle(fontSize: 12)),
-                ]),
-              );
-            }).toList(),
+          const SizedBox(width: 20),
+          Expanded(
+            flex: 1,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: deptoCount.keys.map((name) {
+                final index = deptoCount.keys.toList().indexOf(name);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Row(children: [
+                    Container(width: 12, height: 12, color: colors[index % colors.length]),
+                    const SizedBox(width: 8),
+                    Text(name, style: const TextStyle(fontSize: 13)),
+                  ]),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Gráfico de Linha para Contribuição
   Widget _buildContribuicaoChart(List<Membro> membros) {
     final Map<String, int> contribuicaoCount = {};
     for (var membro in membros) {
-      for (var entry in membro.contribuicao.entries) {
-        if (entry.value == true) {
-          contribuicaoCount[entry.key] = (contribuicaoCount[entry.key] ?? 0) + 1;
+      membro.contribuicao.forEach((year, data) {
+        if (data is Map) {
+          final meses = data['meses'] as Map<String, dynamic>?;
+          if (meses != null) {
+            final paidMonthsInYear = meses.values.where((isPaid) => isPaid == true).length;
+            if (paidMonthsInYear > 0) {
+              contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + paidMonthsInYear;
+            }
+          }
         }
-      }
+      });
     }
 
     final sortedKeys = contribuicaoCount.keys.toList()..sort();
     if (sortedKeys.isEmpty) {
-      return _buildChartCard(title: 'Contribuições Pagas por Ano', chart: const Center(child: Text("Nenhum dado de contribuição.")));
+      return _buildChartCard(title: 'Meses Pagos por Ano', chart: const Center(child: Text("Nenhum dado de contribuição.")));
     }
 
     final List<FlSpot> spots = sortedKeys.map((year) {
@@ -267,44 +277,48 @@ class _DashboardPageState extends State<DashboardPage> {
     }).toList();
 
     return _buildChartCard(
-      title: 'Contribuições Pagas por Ano',
+      title: 'Total de Meses Pagos por Ano',
       chart: LineChart(
         LineChartData(
-          gridData: const FlGridData(show: true, drawVerticalLine: false),
+          gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1)),
           titlesData: FlTitlesData(
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 30,
-                interval: sortedKeys.length > 10 ? (sortedKeys.length / 5).roundToDouble() : 1,
+                interval: sortedKeys.length > 5 ? (sortedKeys.length / 4).ceilToDouble() : 1,
                 getTitlesWidget: (value, meta) {
                   return Padding(
-                    padding: const EdgeInsets.only(top: 6.0),
-                    child: Text(value.toInt().toString(), style: const TextStyle(fontSize: 10)),
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(value.toInt().toString(), style: const TextStyle(fontSize: 11, color: Colors.black54)),
                   );
                 },
               ),
             ),
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, interval: 1)),
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, interval: (contribuicaoCount.values.fold(0, (max, v) => v > max ? v : max) / 5).ceilToDouble())),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
-          borderData: FlBorderData(show: false),
+          borderData: FlBorderData(show: true, border: Border.all(color: Colors.black12)),
           minX: double.parse(sortedKeys.first),
           maxX: double.parse(sortedKeys.last),
           minY: 0,
-          maxY: contribuicaoCount.values.fold(0, (max, v) => v > max ? v : max).toDouble() + 2,
+          maxY: contribuicaoCount.values.fold(0, (max, v) => v > max ? v : max).toDouble() * 1.2,
           lineBarsData: [
             LineChartBarData(
               spots: spots,
               isCurved: true,
-              color: Colors.green,
-              barWidth: 3,
+              gradient: LinearGradient(colors: [Colors.green.shade300, Colors.green.shade700]),
+              barWidth: 4,
               isStrokeCapRound: true,
-              dotData: const FlDotData(show: true),
+              dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 5, color: Colors.green.shade800, strokeWidth: 1, strokeColor: Colors.white)),
               belowBarData: BarAreaData(
                 show: true,
-                color: Colors.green.withOpacity(0.3),
+                gradient: LinearGradient(
+                  colors: [Colors.green.shade300.withOpacity(0.3), Colors.green.shade700.withOpacity(0.0)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
             ),
           ],
@@ -314,7 +328,6 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// Classe auxiliar para agrupar os dados do dashboard
 class DashboardData {
   final List<Membro> membros;
   final Map<String, String> situacoes;

@@ -25,24 +25,31 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   bool _isSaving = false;
   Uint8List? _newImageBytes;
 
-  final List<bool> _expansionPanelOpenState = [true, true];
+  final List<bool> _expansionPanelOpenState = [true, true, true];
   List<String> _allDepartamentos = [];
   Map<String, String> _allSituacoes = {};
   List<String> _allAnosContribuicao = [];
   List<String> _allTiposMediunidade = [];
+
+  // CORREÇÃO: Mapa para separar a chave de armazenamento do rótulo de exibição.
+  final Map<String, String> _meses = {
+    'janeiro': 'Janeiro',
+    'fevereiro': 'Fevereiro',
+    'marco': 'Março',
+    'abril': 'Abril',
+    'maio': 'Maio',
+    'junho': 'Junho',
+    'julho': 'Julho',
+    'agosto': 'Agosto',
+    'setembro': 'Setembro',
+    'outubro': 'Outubro',
+    'novembro': 'Novembro',
+    'dezembro': 'Dezembro',
+  };
+
   final List<String> _sexoOptions = ['Masculino', 'Feminino', 'Não especificado'];
   final List<String> _escolaridadeOptions = [
-    'Ensino Fundamental - Incompleto',
-    'Ensino Fundamental - Completo',
-    'Ensino Médio - Incompleto',
-    'Ensino Médio - Completo',
-    'Magistério - Completo',
-    'Ensino Superior - Incompleto',
-    'Ensino Superior - Completo',
-    'Mestrado - Incompleto',
-    'Mestrado - Completo',
-    'Doutorado - Incompleto',
-    'Doutorado - Completo'
+    'Ensino Fundamental - Incompleto', 'Ensino Fundamental - Completo', 'Ensino Médio - Incompleto', 'Ensino Médio - Completo', 'Magistério - Completo', 'Ensino Superior - Incompleto', 'Ensino Superior - Completo', 'Mestrado - Incompleto', 'Mestrado - Completo', 'Doutorado - Incompleto', 'Doutorado - Completo'
   ];
   final List<String> _estadosCivis = ['Solteiro (a)', 'Casado (a)', 'Divorciado (a)', 'Viúvo (a)', 'Separado (a)'];
   bool _isLoadingBases = true;
@@ -61,8 +68,12 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   void initState() {
     super.initState();
     _isNewMember = widget.membro == null;
+    _initializeFormData();
     _loadBases();
+    _cepController.addListener(_onCepChanged);
+  }
 
+  void _initializeFormData() {
     if (widget.membro != null) {
       final m = widget.membro!;
       _formData = Membro(
@@ -70,7 +81,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
         nome: m.nome,
         foto: m.foto,
         atividades: List<String>.from(m.atividades),
-        contribuicao: Map<String, bool>.from(m.contribuicao),
+        contribuicao: Map<String, dynamic>.from(m.contribuicao),
         dadosPessoais: DadosPessoais.fromMap(m.dadosPessoais.toMap()),
         atualizacao: m.atualizacao,
         atualizacaoCD: m.atualizacaoCD,
@@ -93,13 +104,8 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       _cidadeController.text = _formData.dadosPessoais.cidade;
       _ufController.text = _formData.dadosPessoais.naturalidadeUF;
     } else {
-      _formData = Membro(
-        nome: '',
-        dadosPessoais: DadosPessoais(),
-      );
+      _formData = Membro(nome: '', dadosPessoais: DadosPessoais());
     }
-
-    _cepController.addListener(_onCepChanged);
   }
 
   @override
@@ -115,9 +121,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
   void _onCepChanged() {
     final cep = _cepMask.getUnmaskedText();
-    if (cep.length == 8) {
-      _fetchCep(cep);
-    }
+    if (cep.length == 8) _fetchCep(cep);
   }
 
   Future<void> _fetchCep(String cep) async {
@@ -134,36 +138,45 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
   Future<void> _loadBases() async {
     try {
-      final deptsFuture = _cadastroService.getDepartamentos();
-      final situacoesFuture = _cadastroService.getSituacoes();
-      final anosFuture = _cadastroService.getAnosContribuicao();
-      final mediunidadesFuture = _cadastroService.getTiposMediunidade();
-
-      final results = await Future.wait([deptsFuture, situacoesFuture, anosFuture, mediunidadesFuture]);
+      final results = await Future.wait([
+        _cadastroService.getDepartamentos(),
+        _cadastroService.getSituacoes(),
+        _cadastroService.getAnosContribuicao(),
+        _cadastroService.getTiposMediunidade(),
+      ]);
 
       if (mounted) {
         setState(() {
           _allDepartamentos = results[0] as List<String>;
           _allSituacoes = results[1] as Map<String, String>;
-          _allAnosContribuicao = results[2] as List<String>;
+          _allAnosContribuicao = (results[2] as List<String>)..sort((a,b) => b.compareTo(a));
           _allTiposMediunidade = results[3] as List<String>;
+
+          final mesesKeys = _meses.keys.toList();
+          for (final ano in _allAnosContribuicao) {
+            _formData.contribuicao.putIfAbsent(ano, () => {'quitado': false, 'meses': { for (var mes in mesesKeys) mes: false }});
+            final anoData = _formData.contribuicao[ano] as Map<String, dynamic>;
+            anoData.putIfAbsent('quitado', () => false);
+            anoData.putIfAbsent('meses', () => { for (var mes in mesesKeys) mes: false });
+            final mesesData = anoData['meses'] as Map<String, dynamic>;
+            for (var mes in mesesKeys) {
+              mesesData.putIfAbsent(mes, () => false);
+            }
+          }
           _isLoadingBases = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingBases = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar bases de dados: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar bases de dados: $e')));
       }
     }
   }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 70, maxWidth: 800);
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 800);
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();
       setState(() => _newImageBytes = bytes);
@@ -174,36 +187,34 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       setState(() => _isSaving = true);
-
       try {
         if (_isNewMember) {
-          // CORRIGIDO: Usa a collection pública
           final DocumentReference docRef = await _cadastroService.membrosCollection.add(_formData.toFirestore());
           _formData.id = docRef.id;
         }
-
         if (_newImageBytes != null) {
-          _formData.foto = await _cadastroService.uploadProfileImage(
-            memberId: _formData.id!,
-            fileBytes: _newImageBytes!,
-          );
+          _formData.foto = await _cadastroService.uploadProfileImage(memberId: _formData.id!, fileBytes: _newImageBytes!);
         }
-
         await _cadastroService.saveMembro(_formData);
-
         if (mounted) Navigator.of(context).pop();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Erro ao salvar: $e'),
-                backgroundColor: Colors.red),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
         }
       } finally {
         if (mounted) setState(() => _isSaving = false);
       }
     }
+  }
+
+  void _toggleAllMonths(String year, bool? value) {
+    if (value == null) return;
+    setState(() {
+      final mesesKeys = _meses.keys.toList();
+      for (var mes in mesesKeys) {
+        ((_formData.contribuicao[year] as Map<String, dynamic>)['meses'] as Map<String, bool>)[mes] = value;
+      }
+    });
   }
 
   @override
@@ -212,13 +223,8 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       appBar: AppBar(
         title: Text(_isNewMember ? 'Adicionar Membro' : 'Editar Membro'),
         actions: [
-          if (_isSaving)
-            const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: CircularProgressIndicator(color: Colors.white)),
-          if (!_isSaving)
-            IconButton(
-                icon: const Icon(Icons.save), onPressed: _saveForm, tooltip: 'Salvar')
+          if (_isSaving) const Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator(color: Colors.white)),
+          if (!_isSaving) IconButton(icon: const Icon(Icons.save), onPressed: _saveForm, tooltip: 'Salvar')
         ],
       ),
       body: Form(
@@ -252,11 +258,12 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
               const SizedBox(height: 16),
               ExpansionPanelList(
                 expansionCallback: (int index, bool isExpanded) {
-                  setState(() => _expansionPanelOpenState[index] = isExpanded);
+                  setState(() => _expansionPanelOpenState[index] = !isExpanded);
                 },
                 children: [
                   _buildCadastroPanel(),
                   _buildDadosPessoaisPanel(),
+                  _buildContribuicaoPanel(),
                 ],
               ),
             ],
@@ -268,9 +275,8 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
   ExpansionPanel _buildCadastroPanel() {
     return ExpansionPanel(
-      headerBuilder: (c, isOpen) => const ListTile(
-          title: Text('Informações Cadastrais',
-              style: TextStyle(fontWeight: FontWeight.bold))),
+      isExpanded: _expansionPanelOpenState[0],
+      headerBuilder: (c, isOpen) => const ListTile(title: Text('Informações Cadastrais', style: TextStyle(fontWeight: FontWeight.bold))),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: _isLoadingBases
@@ -278,138 +284,55 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTextField(
-                  label: 'Nome Completo',
-                  initialValue: _formData.nome,
-                  onSaved: (v) => _formData.nome = v!,
-                  isRequired: true),
+              _buildTextField(label: 'Nome Completo', initialValue: _formData.nome, onSaved: (v) => _formData.nome = v!, isRequired: true),
               DropdownButtonFormField<String>(
-                value: _formData.situacaoSEAE > 0 && _allSituacoes.containsKey(_formData.situacaoSEAE.toString())
-                    ? _formData.situacaoSEAE.toString()
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Situação SEAE',
-                  border: OutlineInputBorder(),
-                ),
-                items: _allSituacoes.entries.map((entry) {
-                  return DropdownMenuItem<String>(
-                    value: entry.key,
-                    child: Text(entry.value),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _formData.situacaoSEAE = int.tryParse(newValue ?? '0') ?? 0;
-                  });
-                },
+                value: _formData.situacaoSEAE > 0 && _allSituacoes.containsKey(_formData.situacaoSEAE.toString()) ? _formData.situacaoSEAE.toString() : null,
+                decoration: const InputDecoration(labelText: 'Situação SEAE', border: OutlineInputBorder()),
+                items: _allSituacoes.entries.map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value))).toList(),
+                onChanged: (String? newValue) => setState(() => _formData.situacaoSEAE = int.tryParse(newValue ?? '0') ?? 0),
                 onSaved: (v) => _formData.situacaoSEAE = int.tryParse(v ?? '0') ?? 0,
               ),
               const SizedBox(height: 16),
               Text('Atividades / Departamentos', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Wrap(
-                spacing: 8.0,
-                runSpacing: 4.0,
+                spacing: 8.0, runSpacing: 4.0,
                 children: _allDepartamentos.map((deptoAbreviacao) {
-                  final bool isSelected =
-                  _formData.atividades.contains(deptoAbreviacao);
+                  final bool isSelected = _formData.atividades.contains(deptoAbreviacao);
                   return FilterChip(
                     label: Text(deptoAbreviacao),
                     selected: isSelected,
                     onSelected: (bool selected) {
                       setState(() {
-                        if (selected) {
-                          _formData.atividades.add(deptoAbreviacao);
-                        } else {
-                          _formData.atividades.remove(deptoAbreviacao);
-                        }
+                        if (selected) _formData.atividades.add(deptoAbreviacao);
+                        else _formData.atividades.remove(deptoAbreviacao);
                       });
                     },
                   );
                 }).toList(),
               ),
               const Divider(height: 24),
-              _buildTextField(
-                  label: 'Frequenta desde (ano)',
-                  initialValue: _formData.frequentaSeaeDesde > 0
-                      ? _formData.frequentaSeaeDesde.toString()
-                      : '',
-                  onSaved: (v) =>
-                  _formData.frequentaSeaeDesde = int.tryParse(v!) ?? 0,
-                  isNumeric: true),
-
+              _buildTextField(label: 'Frequenta desde (ano)', initialValue: _formData.frequentaSeaeDesde > 0 ? _formData.frequentaSeaeDesde.toString() : '', onSaved: (v) => _formData.frequentaSeaeDesde = int.tryParse(v!) ?? 0, isNumeric: true),
               _buildMultiSelectMediunidadeField(),
-
-              _buildTextField(
-                  label: 'Data Proposta',
-                  initialValue: _formData.dataProposta,
-                  onSaved: (v) => _formData.dataProposta = v!,
-                  mask: _dataMask),
-              _buildTextField(
-                  label: 'Data Aprovação CD',
-                  initialValue: _formData.dataAprovacaoCD,
-                  onSaved: (v) => _formData.dataAprovacaoCD = v!,
-                  mask: _dataMask),
-              _buildTextField(
-                  label: 'Data Atualização',
-                  initialValue: _formData.dataAtualizacao,
-                  onSaved: (v) => _formData.dataAtualizacao = v!,
-                  mask: _dataMask),
-              _buildTextField(
-                  label: 'Atualização CD',
-                  initialValue: _formData.atualizacaoCD,
-                  onSaved: (v) => _formData.atualizacaoCD = v!),
-              _buildTextField(
-                  label: 'Atualização CF',
-                  initialValue: _formData.atualizacaoCF,
-                  onSaved: (v) => _formData.atualizacaoCF = v!),
-              _buildSwitch('Atualização?', _formData.atualizacao,
-                      (val) => setState(() => _formData.atualizacao = val)),
-              _buildSwitch(
-                  'Frequentou outros centros?',
-                  _formData.frequentouOutrosCentros,
-                      (val) => setState(() => _formData.frequentouOutrosCentros = val)),
-              _buildSwitch('Lista de Contribuintes?', _formData.listaContribuintes,
-                      (val) => setState(() => _formData.listaContribuintes = val)),
-              _buildSwitch(
-                  'Mediunidade Ostensiva?',
-                  _formData.mediunidadeOstensiva,
-                      (val) => setState(() => _formData.mediunidadeOstensiva = val)),
-              _buildSwitch('É novo sócio?', _formData.novoSocio,
-                      (val) => setState(() => _formData.novoSocio = val)),
-              _buildSwitch(
-                  'Transferência Automática?',
-                  _formData.transfAutomatica,
-                      (val) => setState(() => _formData.transfAutomatica = val)),
-
-              const Divider(height: 24),
-
-              Text('Contribuições', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 4.0,
-                children: _allAnosContribuicao.map((ano) {
-                  final bool isPaid = _formData.contribuicao[ano] ?? false;
-                  return ChoiceChip(
-                    label: Text(ano),
-                    selected: isPaid,
-                    onSelected: (bool selected) {
-                      setState(() {
-                        _formData.contribuicao[ano] = selected;
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
+              _buildTextField(label: 'Data Proposta', initialValue: _formData.dataProposta, onSaved: (v) => _formData.dataProposta = v!, mask: _dataMask),
+              _buildTextField(label: 'Data Aprovação CD', initialValue: _formData.dataAprovacaoCD, onSaved: (v) => _formData.dataAprovacaoCD = v!, mask: _dataMask),
+              _buildTextField(label: 'Data Atualização', initialValue: _formData.dataAtualizacao, onSaved: (v) => _formData.dataAtualizacao = v!, mask: _dataMask),
+              _buildTextField(label: 'Atualização CD', initialValue: _formData.atualizacaoCD, onSaved: (v) => _formData.atualizacaoCD = v!),
+              _buildTextField(label: 'Atualização CF', initialValue: _formData.atualizacaoCF, onSaved: (v) => _formData.atualizacaoCF = v!),
+              _buildSwitch('Atualização?', _formData.atualizacao, (val) => setState(() => _formData.atualizacao = val)),
+              _buildSwitch('Frequentou outros centros?', _formData.frequentouOutrosCentros, (val) => setState(() => _formData.frequentouOutrosCentros = val)),
+              _buildSwitch('Lista de Contribuintes?', _formData.listaContribuintes, (val) => setState(() => _formData.listaContribuintes = val)),
+              _buildSwitch('Mediunidade Ostensiva?', _formData.mediunidadeOstensiva, (val) => setState(() => _formData.mediunidadeOstensiva = val)),
+              _buildSwitch('É novo sócio?', _formData.novoSocio, (val) => setState(() => _formData.novoSocio = val)),
+              _buildSwitch('Transferência Automática?', _formData.transfAutomatica, (val) => setState(() => _formData.transfAutomatica = val)),
             ]),
       ),
-      isExpanded: _expansionPanelOpenState[0],
     );
   }
 
   ExpansionPanel _buildDadosPessoaisPanel() {
     return ExpansionPanel(
+      isExpanded: _expansionPanelOpenState[1],
       headerBuilder: (c, isOpen) => const ListTile(
           title: Text('Dados Pessoais',
               style: TextStyle(fontWeight: FontWeight.bold))),
@@ -428,80 +351,108 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
               _buildTextField(label: 'CPF', initialValue: _formData.dadosPessoais.cpf, onSaved: (v) => _formData.dadosPessoais.cpf = v!, mask: _cpfMask, isNumeric: true),
               _buildTextField(label: 'RG', initialValue: _formData.dadosPessoais.rg, onSaved: (v) => _formData.dadosPessoais.rg = v!),
               _buildTextField(label: 'Orgão Exp. RG', initialValue: _formData.dadosPessoais.rgOrgaoExpedidor, onSaved: (v) => _formData.dadosPessoais.rgOrgaoExpedidor = v!),
-
-              _buildDropdown(
-                label: 'Sexo',
-                value: _formData.dadosPessoais.sexo,
-                items: _sexoOptions,
-                onChanged: (val) => setState(() => _formData.dadosPessoais.sexo = val ?? ''),
-                onSaved: (val) => _formData.dadosPessoais.sexo = val ?? '',
-              ),
-
-              _buildDropdown(
-                label: 'Estado Civil',
-                value: _formData.dadosPessoais.estadoCivil,
-                items: _estadosCivis,
-                onChanged: (val) => setState(() => _formData.dadosPessoais.estadoCivil = val ?? ''),
-                onSaved: (val) => _formData.dadosPessoais.estadoCivil = val ?? '',
-              ),
-
-              _buildDropdown(
-                label: 'Escolaridade',
-                value: _formData.dadosPessoais.escolaridade,
-                items: _escolaridadeOptions,
-                onChanged: (val) => setState(() => _formData.dadosPessoais.escolaridade = val ?? ''),
-                onSaved: (val) => _formData.dadosPessoais.escolaridade = val ?? '',
-              ),
-
+              _buildDropdown(label: 'Sexo', value: _formData.dadosPessoais.sexo, items: _sexoOptions, onChanged: (val) => setState(() => _formData.dadosPessoais.sexo = val ?? ''), onSaved: (val) => _formData.dadosPessoais.sexo = val ?? ''),
+              _buildDropdown(label: 'Estado Civil', value: _formData.dadosPessoais.estadoCivil, items: _estadosCivis, onChanged: (val) => setState(() => _formData.dadosPessoais.estadoCivil = val ?? ''), onSaved: (val) => _formData.dadosPessoais.estadoCivil = val ?? ''),
+              _buildDropdown(label: 'Escolaridade', value: _formData.dadosPessoais.escolaridade, items: _escolaridadeOptions, onChanged: (val) => setState(() => _formData.dadosPessoais.escolaridade = val ?? ''), onSaved: (val) => _formData.dadosPessoais.escolaridade = val ?? ''),
               _buildTextField(label: 'Profissão', initialValue: _formData.dadosPessoais.profissao, onSaved: (v) => _formData.dadosPessoais.profissao = v!),
               _buildTextField(label: 'Local de Trabalho', initialValue: _formData.dadosPessoais.localDeTrabalho, onSaved: (v) => _formData.dadosPessoais.localDeTrabalho = v!),
               _buildTextField(label: 'Naturalidade', initialValue: _formData.dadosPessoais.naturalidade, onSaved: (v) => _formData.dadosPessoais.naturalidade = v!),
-
               const Divider(height: 24),
-
               Text('Endereço', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              _buildTextField(
-                  label: 'CEP',
-                  onSaved: (v) => _formData.dadosPessoais.cep = v!,
-                  controller: _cepController,
-                  mask: _cepMask,
-                  isNumeric: true),
-              _buildTextField(
-                  label: 'Endereço',
-                  onSaved: (v) => _formData.dadosPessoais.endereco = v!,
-                  controller: _enderecoController),
-              _buildTextField(
-                  label: 'Complemento',
-                  initialValue: _formData.dadosPessoais.complemento,
-                  onSaved: (v) => _formData.dadosPessoais.complemento = v!),
-              _buildTextField(
-                  label: 'Bairro',
-                  onSaved: (v) => _formData.dadosPessoais.bairro = v!,
-                  controller: _bairroController),
-              _buildTextField(
-                  label: 'Cidade',
-                  onSaved: (v) => _formData.dadosPessoais.cidade = v!,
-                  controller: _cidadeController),
-              _buildTextField(
-                  label: 'UF',
-                  onSaved: (v) => _formData.dadosPessoais.naturalidadeUF = v!,
-                  controller: _ufController),
+              _buildTextField(label: 'CEP', onSaved: (v) => _formData.dadosPessoais.cep = v!, controller: _cepController, mask: _cepMask, isNumeric: true),
+              _buildTextField(label: 'Endereço', onSaved: (v) => _formData.dadosPessoais.endereco = v!, controller: _enderecoController),
+              _buildTextField(label: 'Complemento', initialValue: _formData.dadosPessoais.complemento, onSaved: (v) => _formData.dadosPessoais.complemento = v!),
+              _buildTextField(label: 'Bairro', onSaved: (v) => _formData.dadosPessoais.bairro = v!, controller: _bairroController),
+              _buildTextField(label: 'Cidade', onSaved: (v) => _formData.dadosPessoais.cidade = v!, controller: _cidadeController),
+              _buildTextField(label: 'UF', onSaved: (v) => _formData.dadosPessoais.naturalidadeUF = v!, controller: _ufController),
             ]),
       ),
-      isExpanded: _expansionPanelOpenState[1],
     );
   }
 
-  Widget _buildTextField({
-    required String label,
-    required Function(String?) onSaved,
-    String? initialValue,
-    TextEditingController? controller,
-    MaskTextInputFormatter? mask,
-    bool isNumeric = false,
-    bool isRequired = false,
-  }) {
+  ExpansionPanel _buildContribuicaoPanel() {
+    return ExpansionPanel(
+      isExpanded: _expansionPanelOpenState[2],
+      headerBuilder: (context, isExpanded) {
+        return const ListTile(title: Text('Gestão de Contribuições', style: TextStyle(fontWeight: FontWeight.bold)));
+      },
+      body: _isLoadingBases
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+        child: Column(
+          children: _allAnosContribuicao.map((ano) {
+            final anoData = _formData.contribuicao[ano] as Map<String, dynamic>;
+            final mesesData = anoData['meses'] as Map<String, bool>;
+            bool todosMesesMarcados = mesesData.values.every((pago) => pago);
+
+            return ExpansionTile(
+              initiallyExpanded: false,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 0),
+              title: Text('Ano $ano', style: const TextStyle(fontWeight: FontWeight.w600)),
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: CheckboxListTile(
+                        title: const Text('Ano Quitado', style: TextStyle(fontSize: 13)),
+                        value: anoData['quitado'] ?? false,
+                        onChanged: (value) => setState(() => anoData['quitado'] = value!),
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    Flexible(
+                      child: CheckboxListTile(
+                        title: const Text('Todos os Meses', style: TextStyle(fontSize: 13)),
+                        value: todosMesesMarcados,
+                        onChanged: (value) => _toggleAllMonths(ano, value),
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                Wrap(
+                  spacing: 0,
+                  runSpacing: 0,
+                  children: _meses.entries.map((entry) {
+                    final mesKey = entry.key;
+                    final mesLabel = entry.value;
+                    return SizedBox(
+                      width: 150,
+                      height: 40,
+                      child: CheckboxListTile(
+                        contentPadding: const EdgeInsets.only(left: 4),
+                        title: Text(mesLabel, style: const TextStyle(fontSize: 13)),
+                        value: mesesData[mesKey] ?? false,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value != null) {
+                              mesesData[mesKey] = value;
+                            }
+                          });
+                        },
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                    );
+                  }).toList(),
+                )
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({ required String label, required Function(String?) onSaved, String? initialValue, TextEditingController? controller, MaskTextInputFormatter? mask, bool isNumeric = false, bool isRequired = false }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
@@ -516,27 +467,13 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     );
   }
 
-  Widget _buildDropdown({
-    required String label,
-    required String value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-    required void Function(String?) onSaved,
-  }) {
+  Widget _buildDropdown({ required String label, required String value, required List<String> items, required void Function(String?) onChanged, required void Function(String?) onSaved }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: DropdownButtonFormField<String>(
         value: value.isNotEmpty && items.contains(value) ? value : null,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
-        items: items.map((String item) {
-          return DropdownMenuItem<String>(
-            value: item,
-            child: Text(item),
-          );
-        }).toList(),
+        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        items: items.map((String item) => DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
         onChanged: onChanged,
         onSaved: onSaved,
       ),
@@ -548,26 +485,15 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: FormField<List<String>>(
         initialValue: _formData.tiposMediunidade,
-        onSaved: (val) {
-          _formData.tiposMediunidade = val ?? [];
-        },
+        onSaved: (val) => _formData.tiposMediunidade = val ?? [],
         builder: (field) {
           return InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Tipos de Mediunidade',
-              border: const OutlineInputBorder(),
-              errorText: field.errorText,
-            ),
+            decoration: InputDecoration(labelText: 'Tipos de Mediunidade', border: const OutlineInputBorder(), errorText: field.errorText),
             child: InkWell(
               onTap: () async {
                 final List<String>? result = await showDialog<List<String>>(
                   context: context,
-                  builder: (BuildContext context) {
-                    return MultiSelectDialog(
-                      items: _allTiposMediunidade,
-                      initialSelectedItems: _formData.tiposMediunidade,
-                    );
-                  },
+                  builder: (BuildContext context) => MultiSelectDialog(items: _allTiposMediunidade, initialSelectedItems: _formData.tiposMediunidade),
                 );
                 if (result != null) {
                   setState(() {
@@ -583,9 +509,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
                     : Wrap(
                   spacing: 6.0,
                   runSpacing: 6.0,
-                  children: _formData.tiposMediunidade
-                      .map((item) => Chip(label: Text(item)))
-                      .toList(),
+                  children: _formData.tiposMediunidade.map((item) => Chip(label: Text(item))).toList(),
                 ),
               ),
             ),
@@ -596,20 +520,14 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   }
 
   Widget _buildSwitch(String title, bool value, Function(bool) onChanged) {
-    return SwitchListTile(
-      title: Text(title),
-      value: value,
-      onChanged: onChanged,
-    );
+    return SwitchListTile(title: Text(title), value: value, onChanged: onChanged);
   }
 }
 
 class MultiSelectDialog extends StatefulWidget {
   final List<String> items;
   final List<String> initialSelectedItems;
-
   const MultiSelectDialog({super.key, required this.items, required this.initialSelectedItems});
-
   @override
   State<MultiSelectDialog> createState() => _MultiSelectDialogState();
 }
@@ -648,18 +566,8 @@ class _MultiSelectDialogState extends State<MultiSelectDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
-          child: const Text('Cancelar'),
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-        ),
-        ElevatedButton(
-          child: const Text('Confirmar'),
-          onPressed: () {
-            Navigator.of(context).pop(_selectedItems);
-          },
-        ),
+        TextButton(child: const Text('Cancelar'), onPressed: () => Navigator.of(context).pop()),
+        ElevatedButton(child: const Text('Confirmar'), onPressed: () => Navigator.of(context).pop(_selectedItems)),
       ],
     );
   }
