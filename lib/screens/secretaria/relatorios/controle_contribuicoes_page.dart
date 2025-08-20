@@ -7,6 +7,9 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+
 import '../../../models/membro.dart';
 
 class ControleContribuicoesPage extends StatefulWidget {
@@ -23,44 +26,36 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   bool _isLoading = true;
   String? _error;
 
+  // Estados dos filtros
   String? _selectedYear;
   List<String> _selectedStatusIds = [];
 
+  // Listas para os filtros
   List<String> _availableYears = [];
   Map<String, String> _situacoesMap = {};
+
+  final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  final List<String> meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    _loadData();
   }
 
-  Future<void> _loadInitialData() async {
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
     try {
-      final all = await _cadastroService.getMembros().first;
-      final anos = await _cadastroService.getAnosContribuicao();
-      final situacoes = await _cadastroService.getSituacoes();
-
-      if (mounted) {
-        setState(() {
-          _allMembers = all.where((m) => m.listaContribuintes).toList();
-          _availableYears = anos..sort((a, b) => b.compareTo(a));
-          _situacoesMap = situacoes;
-
-          if (_availableYears.isNotEmpty) {
-            _selectedYear = _availableYears.first;
-          }
-          _applyFilters();
-        });
-      }
+      await _loadYears();
+      await _loadSituacoes();
+      await _loadAllMembers();
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = "Falha ao carregar dados: $e";
+          _error = 'Erro ao carregar dados: $e';
         });
       }
     } finally {
@@ -72,243 +67,208 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     }
   }
 
-  void _applyFilters() {
-    List<Membro> filtered = List.from(_allMembers);
-
-    if (_selectedStatusIds.isNotEmpty) {
-      filtered = filtered.where((m) => _selectedStatusIds.contains(m.situacaoSEAE.toString())).toList();
+  Future<void> _loadSituacoes() async {
+    try {
+      _situacoesMap = await _cadastroService.getSituacoes();
+    } catch (e) {
+      if(mounted) {
+        setState(() {
+          _error = 'Erro ao carregar as situações: $e';
+        });
+      }
     }
+  }
 
-    filtered.sort((a, b) => a.nome.compareTo(b.nome));
+  Future<void> _loadAllMembers() async {
+    try {
+      final members = await _cadastroService.getMembros().first;
+      if (mounted) {
+        setState(() {
+          _allMembers = members;
+          _applyFilters();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Erro ao carregar membros: $e';
+        });
+      }
+    }
+  }
 
+  Future<void> _loadYears() async {
+    try {
+      // Corrigido: Usando o método existente 'getAnosContribuicao'
+      final years = await _cadastroService.getAnosContribuicao();
+      if (mounted) {
+        setState(() {
+          _availableYears = years;
+          _selectedYear = _availableYears.isNotEmpty ? _availableYears.first : null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Erro ao carregar anos: $e';
+        });
+      }
+    }
+  }
+
+  void _applyFilters() {
     setState(() {
-      _filteredMembers = filtered;
+      _filteredMembers = _allMembers.where((membro) {
+        final matchesStatus = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
+        return matchesStatus;
+      }).toList();
+
+      _filteredMembers.sort((a, b) => a.nome.compareTo(b.nome));
     });
   }
 
-  Future<Uint8List> _buildPdfBytes() async {
+  Future<void> _gerarPdf() async {
     final pdf = pw.Document();
-    final year = _selectedYear ?? DateTime.now().year.toString();
-    final List<String> meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
-    const checkMark = '✓';
-    const emptyBox = '☐';
+    final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+    final boldTtf = pw.Font.ttf(boldFontData);
 
-    final headers = ['Nome', 'Dados At.', ...meses];
-
-    final data = _filteredMembers.map((membro) {
-      final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
-      final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
-
-      final row = <String>[];
-      row.add(membro.nome);
-      row.add(membro.atualizacao ? checkMark : emptyBox);
-
-      for (final mesKey in mesesKeys) {
-        row.add(mesesData[mesKey] == true ? checkMark : emptyBox);
-      }
-      return row;
-    }).toList();
+    final logoImage = await rootBundle.load('assets/images/logo_SEAE_azul.png');
+    final image = pw.MemoryImage(logoImage.buffer.asUint8List());
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        build: (pw.Context context) => [
-          pw.Header(
-            level: 0,
-            text: 'Controle de Contribuições Mensais - $year',
-            textStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18),
-          ),
-          pw.TableHelper.fromTextArray(
-            context: context,
-            headers: headers,
-            data: data,
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            cellStyle: const pw.TextStyle(fontSize: 10),
-            cellAlignment: pw.Alignment.centerLeft,
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-          ),
-        ],
+        pageFormat: PdfPageFormat.a4,
+        theme: pw.ThemeData.withFont(
+          base: ttf,
+          bold: boldTtf,
+        ),
+        header: (context) => _buildHeader(now, image, boldTtf),
+        build: (context) => [_buildContentTable(context)],
+        footer: (context) => _buildFooter(context),
       ),
     );
-
-    return pdf.save();
-  }
-
-  Future<void> _generateAndDownloadPdf() async {
-    final bytes = await _buildPdfBytes();
+    final bytes = await pdf.save();
     if (kIsWeb) {
-      final blob = web.Blob(
-        [bytes.toJS].toJS,
-        web.BlobPropertyBag(type: 'application/pdf'),
-      );
+      final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'application/pdf'));
       final url = web.URL.createObjectURL(blob);
-      final anchor = web.document.createElement('a') as web.HTMLAnchorElement
-        ..href = url
-        ..style.display = 'none'
-        ..download = 'controle_contribuicoes_$_selectedYear.pdf';
-      web.document.body?.append(anchor);
-      anchor.click();
-      web.document.body?.removeChild(anchor);
+      web.window.open(url, '_blank');
       web.URL.revokeObjectURL(url);
     } else {
-      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => bytes);
+      await Printing.layoutPdf(onLayout: (format) async => bytes);
     }
-  }
-
-  Future<void> _generateAndPrintPdf() async {
-    final bytes = await _buildPdfBytes();
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => bytes);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Controle de Contribuições - ${_selectedYear ?? ''}'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(child: Text(_error!))
-          : Column(
-        children: [
-          _buildFilterBar(),
-          Expanded(child: _buildDataTable()),
+        title: const Text('Controle de Contribuições'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: _filteredMembers.isNotEmpty && _selectedYear != null ? _gerarPdf : null,
+          ),
         ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildFilterRow(),
+            if (_isLoading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else if (_error != null)
+              Expanded(child: Center(child: Text(_error!)))
+            else
+              _buildDataTable(),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildFilterRow() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Wrap(
+        spacing: 16.0,
+        runSpacing: 8.0,
+        alignment: WrapAlignment.center,
         children: [
-          Expanded(
-            flex: 2,
+          SizedBox(
+            width: 150,
             child: DropdownButtonFormField<String>(
-              initialValue: _selectedYear,
-              hint: const Text('Selecione o Ano'),
               decoration: const InputDecoration(
                 labelText: 'Ano',
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
-              items: _availableYears.map((year) {
-                return DropdownMenuItem(value: year, child: Text(year));
+              value: _selectedYear,
+              items: _availableYears.map((String year) {
+                return DropdownMenuItem<String>(
+                  value: year,
+                  child: Text(year),
+                );
               }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedYear = value;
-                  _applyFilters();
-                });
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedYear = newValue;
+                  });
+                }
               },
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 3,
-            child: _buildMultiSelectStatusFilter(),
+          SizedBox(
+            width: 200,
+            child: DropdownButtonFormField<List<String>>(
+              decoration: const InputDecoration(
+                labelText: 'Situação',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              value: _selectedStatusIds,
+              isExpanded: true,
+              hint: const Text('Filtrar por Situação'),
+              items: [
+                DropdownMenuItem<List<String>>(
+                  value: [],
+                  child: const Text('Todas'),
+                ),
+                ..._situacoesMap.entries.map((entry) {
+                  return DropdownMenuItem<List<String>>(
+                    value: [entry.key],
+                    child: Text(entry.value),
+                  );
+                }).toList(),
+              ],
+              onChanged: (List<String>? newValues) {
+                if (newValues != null) {
+                  setState(() {
+                    _selectedStatusIds = newValues;
+                    _applyFilters();
+                  });
+                }
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMultiSelectStatusFilter() {
-    return InkWell(
-      onTap: () => _showMultiSelectStatusDialog(),
-      child: InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'Situação',
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-        child: _selectedStatusIds.isEmpty
-            ? const Text('Todas as Situações')
-            : Wrap(
-          spacing: 6.0,
-          runSpacing: 6.0,
-          children: _selectedStatusIds.map((id) {
-            return Chip(
-              label: Text(_situacoesMap[id] ?? 'N/D'),
-              onDeleted: () {
-                setState(() {
-                  _selectedStatusIds.remove(id);
-                  _applyFilters();
-                });
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showMultiSelectStatusDialog() async {
-    final List<String> tempSelected = List.from(_selectedStatusIds);
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Selecione as Situações'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: _situacoesMap.entries.map((entry) {
-                    final isSelected = tempSelected.contains(entry.key);
-                    return CheckboxListTile(
-                      title: Text(entry.value),
-                      value: isSelected,
-                      onChanged: (bool? value) {
-                        setDialogState(() {
-                          if (value == true) {
-                            tempSelected.add(entry.key);
-                          } else {
-                            tempSelected.remove(entry.key);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedStatusIds = tempSelected;
-                      _applyFilters();
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Confirmar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildDataTable() {
     if (_filteredMembers.isEmpty) {
-      return const Center(child: Text('Nenhum membro encontrado com os filtros selecionados.'));
+      return const Expanded(
+        child: Center(
+          child: Text('Nenhum membro encontrado com os filtros selecionados.'),
+        ),
+      );
     }
-
-    final List<String> meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    final year = _selectedYear ?? DateTime.now().year.toString();
-
     return SingleChildScrollView(
       scrollDirection: Axis.vertical,
       child: SingleChildScrollView(
@@ -316,13 +276,14 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: DataTable(
-            headingRowColor: WidgetStateColor.resolveWith((states) => Colors.grey.shade200),
+            headingRowColor: MaterialStateColor.resolveWith((states) => Colors.grey.shade200),
             columns: [
               const DataColumn(label: Text('Nome', style: TextStyle(fontWeight: FontWeight.bold))),
               const DataColumn(label: Text('Dados\nAtualizados', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
               ...meses.map((mes) => DataColumn(label: Text(mes, style: const TextStyle(fontWeight: FontWeight.bold)))),
             ],
             rows: _filteredMembers.map((membro) {
+              final year = _selectedYear ?? DateTime.now().year.toString();
               final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
               final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
 
@@ -335,6 +296,64 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
           ),
         ),
       ),
+    );
+  }
+
+  pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
+    return pw.Container(
+      alignment: pw.Alignment.center,
+      margin: const pw.EdgeInsets.only(bottom: 20.0),
+      child: pw.Column(
+        children: [
+          pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Image(logo, width: 50, height: 50),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text('Controle de Contribuições Mensais', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, font: font)),
+                    pw.SizedBox(height: 5),
+                    pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+                pw.SizedBox(width: 50),
+              ]
+          ),
+          pw.Divider(color: PdfColors.grey),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildContentTable(pw.Context context) {
+    final year = _selectedYear ?? DateTime.now().year.toString();
+    final tableHeaders = ['Nome', 'Dados Atualizados', ...meses];
+    final tableData = _filteredMembers.map((membro) {
+      final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
+      final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+      return [
+        membro.nome,
+        membro.atualizacao ? 'Sim' : 'Não',
+        ...mesesKeys.map((mesKey) => (mesesData[mesKey] ?? false) ? 'Sim' : 'Não').toList(),
+      ];
+    }).toList();
+
+    return pw.TableHelper.fromTextArray(
+      headers: tableHeaders,
+      data: tableData,
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+      cellStyle: const pw.TextStyle(fontSize: 8),
+      border: pw.TableBorder.all(),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+    );
+  }
+
+  pw.Widget _buildFooter(pw.Context context) {
+    return pw.Container(
+      alignment: pw.Alignment.centerRight,
+      margin: const pw.EdgeInsets.only(top: 10.0),
+      child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
     );
   }
 }

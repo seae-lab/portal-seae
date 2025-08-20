@@ -152,13 +152,22 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
+    final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+    final boldTtf = pw.Font.ttf(boldFontData);
+
     final logoImage = await rootBundle.load('assets/images/logo_SEAE_azul.png');
     final image = pw.MemoryImage(logoImage.buffer.asUint8List());
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildHeader(now, image),
+        theme: pw.ThemeData.withFont(
+          base: ttf,
+          bold: boldTtf,
+        ),
+        header: (context) => _buildHeader(now, image, boldTtf),
         build: (context) => [_buildContentTable(context)],
         footer: (context) => _buildFooter(context),
       ),
@@ -179,6 +188,9 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sócios Colaboradores Promovíveis'),
+        actions: [
+          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _membrosPromoviveis.isNotEmpty ? _gerarPdf : null),
+        ],
       ),
       body: _buildBody(),
     );
@@ -259,7 +271,7 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
     );
   }
 
-  pw.Widget _buildHeader(String now, pw.MemoryImage logo) {
+  pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
     return pw.Container(
       alignment: pw.Alignment.center,
       margin: const pw.EdgeInsets.only(bottom: 20.0),
@@ -272,7 +284,7 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Relação de Sócios Colaboradores Promovíveis a Efetivos', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.Text('Relação de Sócios Colaboradores Promovíveis a Efetivos', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, font: font)),
                     pw.SizedBox(height: 5),
                     pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),
                   ],

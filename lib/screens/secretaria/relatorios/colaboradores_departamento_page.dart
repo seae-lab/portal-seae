@@ -30,14 +30,14 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
 
   static const List<int> idsSituacoesIncluidas = [2, 3, 4];
 
+  // Map para mapear chaves de campos para nomes de colunas
   final Map<String, String> _availableFields = {
     'nome': 'Nome',
-    'cpf': 'CPF',
+    'dados_pessoais.cpf': 'CPF',
     'situacao_nome': 'Situação',
-    'departamento': 'Departamento',
-    'ultima_atualizacao': 'Última Atualização',
+    'data_proposta': 'Data de Proposta',
   };
-  Set<String> _activeColumns = {'nome', 'cpf', 'departamento', 'situacao_nome', 'ultima_atualizacao'};
+  Set<String> _activeColumns = {'nome', 'situacao_nome'};
 
   @override
   void initState() {
@@ -50,12 +50,21 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
       _isLoading = true;
       _error = null;
     });
-    await _loadSituacoes();
-    await _apurarColaboradores();
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+    try {
+      await _loadSituacoes();
+      await _loadMembros();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Erro ao carregar dados: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -63,7 +72,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     try {
       _situacoesMap = await _cadastroService.getSituacoes();
     } catch (e) {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _error = 'Erro ao carregar as situações: $e';
         });
@@ -71,36 +80,35 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     }
   }
 
-  Future<void> _apurarColaboradores() async {
+  Future<void> _loadMembros() async {
     try {
       final todosMembros = await _cadastroService.getMembros().first;
-
       final colaboradores = todosMembros.where((membro) {
-        final situacaoValida = idsSituacoesIncluidas.contains(membro.situacaoSEAE);
-        final deptoValido = membro.atividades.isNotEmpty;
-        return situacaoValida && deptoValido;
+        // Corrigido: Usando 'atividades' em vez de 'departamentos'
+        return membro.atividades.isNotEmpty && idsSituacoesIncluidas.contains(membro.situacaoSEAE);
       }).toList();
 
-      final Map<String, List<Membro>> agrupado = {};
-      for (var membro in colaboradores) {
-        for (var atividade in membro.atividades) {
-          if (agrupado.containsKey(atividade)) {
-            agrupado[atividade]!.add(membro);
-          } else {
-            agrupado[atividade] = [membro];
-          }
+      final Map<String, List<Membro>> tempMap = {};
+      for (final membro in colaboradores) {
+        // Corrigido: Usando 'atividades' em vez de 'departamentos'
+        for (final depto in membro.atividades) {
+          tempMap.putIfAbsent(depto, () => []).add(membro);
         }
       }
 
+      tempMap.forEach((key, value) {
+        value.sort((a, b) => a.nome.compareTo(b.nome));
+      });
+
       if (mounted) {
         setState(() {
-          _colaboradoresPorDepto = agrupado;
+          _colaboradoresPorDepto = tempMap;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Erro ao buscar dados: $e';
+          _error = 'Erro ao buscar membros: $e';
         });
       }
     }
@@ -110,14 +118,12 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     switch (field) {
       case 'nome':
         return membro.nome;
-      case 'cpf':
+      case 'dados_pessoais.cpf':
         return membro.dadosPessoais.cpf;
       case 'situacao_nome':
         return _situacoesMap[membro.situacaoSEAE.toString()] ?? 'N/A';
-      case 'departamento':
-        return membro.atividades.join(', ');
-      case 'ultima_atualizacao':
-        return membro.dataAtualizacao;
+      case 'data_proposta':
+        return membro.dataProposta;
       default:
         return '';
     }
@@ -127,13 +133,22 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
+    final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+    final boldTtf = pw.Font.ttf(boldFontData);
+
     final logoImage = await rootBundle.load('assets/images/logo_SEAE_azul.png');
     final image = pw.MemoryImage(logoImage.buffer.asUint8List());
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildHeader(now, image),
+        theme: pw.ThemeData.withFont(
+          base: ttf,
+          bold: boldTtf,
+        ),
+        header: (context) => _buildHeader(now, image, boldTtf),
         build: (context) => _buildContent(context),
         footer: (context) => _buildFooter(context),
       ),
@@ -154,6 +169,9 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     return Scaffold(
       appBar: AppBar(
         title: const Text('Colaboradores por Departamento'),
+        actions: [
+          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _colaboradoresPorDepto.isNotEmpty ? _gerarPdf : null),
+        ],
       ),
       body: _buildBody(),
     );
@@ -162,7 +180,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
   Widget _buildBody() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
-    if (_colaboradoresPorDepto.isEmpty) return const Center(child: Text('Nenhum colaborador vinculado a departamentos encontrado.'));
+    if (_colaboradoresPorDepto.isEmpty) return const Center(child: Text('Nenhum colaborador encontrado para os departamentos.'));
 
     final deptosOrdenados = _colaboradoresPorDepto.keys.toList()..sort();
 
@@ -171,28 +189,31 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
         _buildColumnSelection(),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.all(16),
             itemCount: deptosOrdenados.length,
             itemBuilder: (context, index) {
               final depto = deptosOrdenados[index];
-              final membros = _colaboradoresPorDepto[depto]!;
-              final sortedMembers = membros..sort((a, b) => a.nome.compareTo(b.nome));
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                child: ExpansionTile(
-                  title: Text('$depto (${membros.length} membros)', style: const TextStyle(fontWeight: FontWeight.bold)),
+              final colaboradores = _colaboradoresPorDepto[depto]!;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      '$depto (${colaboradores.length} membros)',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         columns: _activeColumns.map((field) {
                           return DataColumn(label: Text(_availableFields[field] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)));
                         }).toList(),
-                        rows: sortedMembers.map((membro) => DataRow(
-                          cells: _activeColumns.map((field) {
+                        rows: colaboradores.map((membro) {
+                          return DataRow(cells: _activeColumns.map((field) {
                             return DataCell(Text(_getCellValue(membro, field)));
-                          }).toList(),
-                        )).toList(),
+                          }).toList());
+                        }).toList(),
                       ),
                     ),
                   ],
@@ -220,7 +241,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
               final field = entry.key;
               final label = entry.value;
               final isSelected = _activeColumns.contains(field);
-              final isDefault = field == 'nome' || field == 'cpf';
+              final isDefault = field == 'nome';
 
               return FilterChip(
                 label: Text(label),
@@ -248,7 +269,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     );
   }
 
-  pw.Widget _buildHeader(String now, pw.MemoryImage logo) {
+  pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
     return pw.Container(
       alignment: pw.Alignment.center,
       margin: const pw.EdgeInsets.only(bottom: 20.0),
@@ -261,7 +282,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Relação de Colaboradores por Departamento', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.Text('Relação de Colaboradores por Departamento', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, font: font)),
                     pw.SizedBox(height: 5),
                     pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),
                   ],
@@ -279,13 +300,14 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     final deptosOrdenados = _colaboradoresPorDepto.keys.toList()..sort();
     final List<pw.Widget> widgets = [];
 
+    final tableHeaders = _activeColumns.map((field) => _availableFields[field] ?? 'N/A').toList();
+
     for (final depto in deptosOrdenados) {
       widgets.add(pw.Header(
         level: 1,
         text: '$depto (${_colaboradoresPorDepto[depto]!.length} membros)',
       ));
 
-      final tableHeaders = _activeColumns.map((field) => _availableFields[field] ?? 'N/A').toList();
       final tableData = _colaboradoresPorDepto[depto]!.map((membro) {
         return _activeColumns.map((field) => _getCellValue(membro, field)).toList();
       }).toList();

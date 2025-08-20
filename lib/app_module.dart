@@ -1,6 +1,4 @@
 // lib/app_module.dart
-
-import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/auth/login_screen.dart';
 import 'package:projetos/screens/dij/dij_page.dart';
@@ -24,12 +22,12 @@ class AppModule extends Module {
   void binds(i) {
     i.addSingleton(AuthService.new);
     i.addSingleton(CadastroService.new);
-    i.addSingleton<RouteObserver<Route<dynamic>>>(RouteObserver<Route<dynamic>>.new);
   }
 
   @override
   void routes(r) {
-    r.child('/', child: (context) => const LoginScreen(), guards: [AuthGuard()]);
+    // AuthGuard removido da rota de login para que ela possa ser acessada
+    r.child('/', child: (context) => const LoginScreen());
 
     r.child('/home',
         child: (context) => const HomeScreen(),
@@ -50,7 +48,6 @@ class AppModule extends Module {
           ChildRoute('/controle_contribuicoes',
               child: (context) => const ControleContribuicoesPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
-
           ChildRoute('/socios_elegiveis',
               child: (context) => const SociosElegiveisPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
@@ -63,7 +60,6 @@ class AppModule extends Module {
           ChildRoute('/colaboradores_departamento',
               child: (context) => const ColaboradoresDepartamentoPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
-
           ChildRoute('/dij',
               child: (context) => const DijPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'dij'])])

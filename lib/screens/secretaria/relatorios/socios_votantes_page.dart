@@ -50,17 +50,15 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     'cpf': 'CPF',
     'data_proposta': 'Data de Proposta',
     'ultima_atualizacao': 'Última Atualização',
-    'departamento': 'Departamento',
     'situacao_nome': 'Situação',
   };
-  Set<String> _activeColumns = {'nome', 'cpf', 'departamento', 'situacao_nome', 'ultima_atualizacao'};
+  Set<String> _activeColumns = {'nome', 'cpf', 'situacao_nome'};
   Map<String, String> _situacoesMap = {};
-
 
   @override
   void initState() {
     super.initState();
-    _setDataBase();
+    _dataBase = DateTime.now();
     _loadData();
   }
 
@@ -70,7 +68,7 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
       _error = null;
     });
     await _loadSituacoes();
-    await _apurarVotantes();
+    await _apurarVotantes(_dataBase);
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -90,23 +88,19 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     }
   }
 
-  void _setDataBase() {
-    final hoje = DateTime.now();
-    _dataBase = DateTime(hoje.year, 8, 31);
-    if (hoje.isBefore(_dataBase)) {
-      _dataBase = DateTime(hoje.year - 1, 8, 31);
-    }
-  }
-
-  Future<void> _apurarVotantes() async {
+  Future<void> _apurarVotantes(DateTime dataBase) async {
     try {
       final todosMembros = await _cadastroService.getMembros().first;
       final votantes = <Membro>[];
+      final tresAnosAtras = DateTime(dataBase.year - 3, dataBase.month, dataBase.day);
 
       for (final membro in todosMembros) {
         if (membro.situacaoSEAE != idSituacaoEfetivo) continue;
 
-        if (!_temContribuicaoVotante(membro)) continue;
+        final dataProposta = DateFormat('dd/MM/yyyy').parse(membro.dataProposta);
+        if (dataProposta.isAfter(tresAnosAtras)) continue;
+
+        if (!_temContribuicaoIninterrupta(membro, 36)) continue;
 
         votantes.add(membro);
       }
@@ -125,12 +119,10 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     }
   }
 
-  bool _temContribuicaoVotante(Membro membro) {
-    final dataFim = _dataBase;
-    final dataInicio = DateTime(dataFim.year - 1, 9, 1);
-
-    for (int i = 0; i < 12; i++) {
-      final dataAlvo = DateTime(dataInicio.year, dataInicio.month + i, 1);
+  bool _temContribuicaoIninterrupta(Membro membro, int totalMeses) {
+    final hoje = DateTime.now();
+    for (int i = 0; i < totalMeses; i++) {
+      final dataAlvo = DateTime(hoje.year, hoje.month - (i + 1), 1);
       final ano = dataAlvo.year.toString();
       final mes = _meses[dataAlvo.month.toString().padLeft(2, '0')];
 
@@ -153,8 +145,6 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
         return membro.dataProposta;
       case 'ultima_atualizacao':
         return membro.dataAtualizacao;
-      case 'departamento':
-        return membro.atividades.join(', ');
       case 'situacao_nome':
         return _situacoesMap[membro.situacaoSEAE.toString()] ?? 'N/A';
       default:
@@ -162,9 +152,33 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     }
   }
 
+  Future<void> _selectDataBase(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _dataBase,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && picked != _dataBase) {
+      setState(() {
+        _dataBase = picked;
+        _isLoading = true;
+      });
+      await _apurarVotantes(_dataBase);
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _gerarPdf() async {
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
+
+    final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+    final boldTtf = pw.Font.ttf(boldFontData);
 
     final logoImage = await rootBundle.load('assets/images/logo_SEAE_azul.png');
     final image = pw.MemoryImage(logoImage.buffer.asUint8List());
@@ -172,7 +186,11 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildHeader(now, image),
+        theme: pw.ThemeData.withFont(
+          base: ttf,
+          bold: boldTtf,
+        ),
+        header: (context) => _buildHeader(now, image, boldTtf),
         build: (context) => [_buildContentTable(context)],
         footer: (context) => _buildFooter(context),
       ),
@@ -193,6 +211,9 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sócios Votantes'),
+        actions: [
+          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _membrosVotantes.isNotEmpty ? _gerarPdf : null),
+        ],
       ),
       body: _buildBody(),
     );
@@ -204,23 +225,30 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
 
     return Column(
       children: [
-        _buildColumnSelection(),
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Text(
-            'Apuração com base em ${DateFormat('dd/MM/yyyy').format(_dataBase)}.',
-            style: Theme.of(context).textTheme.titleMedium,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Data Base:'),
+              TextButton(
+                onPressed: () => _selectDataBase(context),
+                child: Text(DateFormat('dd/MM/yyyy').format(_dataBase)),
+              ),
+            ],
           ),
         ),
-        if (_membrosVotantes.isEmpty)
-          const Expanded(child: Center(child: Text('Nenhum sócio votante encontrado.')))
-        else
-          Expanded(
-            child: SingleChildScrollView(
+        _membrosVotantes.isEmpty
+            ? const Expanded(child: Center(child: Text('Nenhum sócio efetivo apto a votar encontrado.')))
+            : Column(
+          children: [
+            _buildColumnSelection(),
+            SingleChildScrollView(
               scrollDirection: Axis.vertical,
-              child: Center(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: DataTable(
                     columns: _activeColumns.map((field) {
                       return DataColumn(label: Text(_availableFields[field] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)));
@@ -234,7 +262,8 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
                 ),
               ),
             ),
-          ),
+          ],
+        ),
       ],
     );
   }
@@ -282,7 +311,7 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     );
   }
 
-  pw.Widget _buildHeader(String now, pw.MemoryImage logo) {
+  pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
     return pw.Container(
       alignment: pw.Alignment.center,
       margin: const pw.EdgeInsets.only(bottom: 20.0),
@@ -295,7 +324,7 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Relação de Sócios Efetivos Votantes', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.Text('Relação de Sócios Efetivos Votantes', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, font: font)),
                     pw.SizedBox(height: 5),
                     pw.Text('Apuração com data base em: ${DateFormat('dd/MM/yyyy').format(_dataBase)}', style: const pw.TextStyle(fontSize: 10)),
                     pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),

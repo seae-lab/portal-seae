@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:projetos/models/user_permissions.dart'; // Corrigi o caminho do import
+import 'package:projetos/models/user_permissions.dart';
 
 class AuthService with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -20,10 +20,11 @@ class AuthService with ChangeNotifier {
   UserPermissions? currentUserPermissions;
   StreamSubscription? _authSubscription;
 
-  // Completer para sinalizar que a verificação inicial de auth foi concluída.
   final Completer<void> _initialAuthCheckCompleter = Completer<void>();
-  // Futuro público que a SplashScreen pode aguardar.
   Future<void> get initialAuthCheck => _initialAuthCheckCompleter.future;
+
+  // Corrigido: Adicionado o getter 'isAuthenticated'
+  bool get isAuthenticated => _auth.currentUser != null;
 
   AuthService() {
     _listenToAuthChanges();
@@ -123,7 +124,8 @@ class AuthService with ChangeNotifier {
 
   String getInitialRouteForUser() {
     if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
-      return '/login';
+      // Corrigido: Rota de login deve ser '/' conforme a configuração do AppModule.
+      return '/';
     }
     if (currentUserPermissions!.hasRole('admin') || currentUserPermissions!.hasRole('secretaria')) {
       return '/home/dashboard';
@@ -131,7 +133,8 @@ class AuthService with ChangeNotifier {
     if (currentUserPermissions!.hasRole('dij')) {
       return '/home/dij';
     }
-    return '/login';
+    // Corrigido: Rota de retorno padrão deve ser a tela de login.
+    return '/';
   }
 
   Future<void> signOut() async {
@@ -139,7 +142,8 @@ class AuthService with ChangeNotifier {
     await _googleSignIn.signOut();
     await _auth.signOut();
     notifyListeners();
-    Modular.to.pushNamedAndRemoveUntil('/login', (_) => false);
+    // Corrigido: Rota de login deve ser '/' conforme a configuração do AppModule.
+    Modular.to.pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   @override

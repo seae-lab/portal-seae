@@ -51,10 +51,9 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     'cpf': 'CPF',
     'data_proposta': 'Data de Proposta',
     'ultima_atualizacao': 'Última Atualização',
-    'departamento': 'Departamento',
     'situacao_nome': 'Situação',
   };
-  Set<String> _activeColumns = {'nome', 'cpf', 'departamento', 'situacao_nome', 'ultima_atualizacao'};
+  Set<String> _activeColumns = {'nome', 'cpf', 'situacao_nome'};
   Map<String, String> _situacoesMap = {};
 
 
@@ -90,14 +89,6 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     }
   }
 
-  DateTime? _parseDate(String dateStr) {
-    try {
-      return DateFormat('dd/MM/yyyy').parse(dateStr);
-    } catch (e) {
-      return null;
-    }
-  }
-
   Future<void> _apurarElegiveis() async {
     try {
       final todosMembros = await _cadastroService.getMembros().first;
@@ -107,14 +98,12 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
       for (final membro in todosMembros) {
         if (membro.situacaoSEAE != idSituacaoEfetivo) continue;
 
-        final dataAssociacao = _parseDate(membro.dataProposta);
-        if (dataAssociacao == null) continue;
-        final anosComoAssociado = hoje.difference(dataAssociacao).inDays / 365.25;
-        if (anosComoAssociado < anosMinimosAssociado) continue;
+        final dataProposta = DateFormat('dd/MM/yyyy').parse(membro.dataProposta);
+        final anosAssociado = hoje.difference(dataProposta).inDays / 365.25;
+
+        if (anosAssociado < anosMinimosAssociado) continue;
 
         if (!_temContribuicaoIninterrupta(membro, mesesContribuicaoIninterrupta)) continue;
-
-        if (membro.atividades.isEmpty) continue;
 
         elegiveis.add(membro);
       }
@@ -136,7 +125,7 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
   bool _temContribuicaoIninterrupta(Membro membro, int totalMeses) {
     final hoje = DateTime.now();
     for (int i = 0; i < totalMeses; i++) {
-      final dataAlvo = DateTime(hoje.year, hoje.month - i, 1);
+      final dataAlvo = DateTime(hoje.year, hoje.month - (i + 1), 1);
       final ano = dataAlvo.year.toString();
       final mes = _meses[dataAlvo.month.toString().padLeft(2, '0')];
 
@@ -159,8 +148,6 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
         return membro.dataProposta;
       case 'ultima_atualizacao':
         return membro.dataAtualizacao;
-      case 'departamento':
-        return membro.atividades.join(', ');
       case 'situacao_nome':
         return _situacoesMap[membro.situacaoSEAE.toString()] ?? 'N/A';
       default:
@@ -172,22 +159,27 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
+    final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+    final boldTtf = pw.Font.ttf(boldFontData);
+
     final logoImage = await rootBundle.load('assets/images/logo_SEAE_azul.png');
     final image = pw.MemoryImage(logoImage.buffer.asUint8List());
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildHeader(now, image),
-        build: (context) => [
-          _buildContentTable(context),
-        ],
+        theme: pw.ThemeData.withFont(
+          base: ttf,
+          bold: boldTtf,
+        ),
+        header: (context) => _buildHeader(now, image, boldTtf),
+        build: (context) => [_buildContentTable(context)],
         footer: (context) => _buildFooter(context),
       ),
     );
-
     final bytes = await pdf.save();
-
     if (kIsWeb) {
       final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'application/pdf'));
       final url = web.URL.createObjectURL(blob);
@@ -203,21 +195,19 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sócios Elegíveis a Conselheiro'),
+        actions: [
+          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _membrosElegiveis.isNotEmpty ? _gerarPdf : null),
+        ],
       ),
       body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return Center(child: Text(_error!));
-    }
-    if (_membrosElegiveis.isEmpty) {
-      return const Center(child: Text('Nenhum sócio elegível encontrado com os critérios atuais.'));
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return Center(child: Text(_error!));
+    if (_membrosElegiveis.isEmpty) return const Center(child: Text('Nenhum sócio efetivo elegível a conselheiro encontrado.'));
+
     return Column(
       children: [
         _buildColumnSelection(),
@@ -288,7 +278,7 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     );
   }
 
-  pw.Widget _buildHeader(String now, pw.MemoryImage logo) {
+  pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
     return pw.Container(
       alignment: pw.Alignment.center,
       margin: const pw.EdgeInsets.only(bottom: 20.0),
@@ -301,7 +291,7 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Relação de Sócios Efetivos Elegíveis a Conselheiro', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.Text('Relação de Sócios Efetivos Elegíveis a Conselheiro', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, font: font)),
                     pw.SizedBox(height: 5),
                     pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),
                   ],
@@ -335,10 +325,7 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     return pw.Container(
       alignment: pw.Alignment.centerRight,
       margin: const pw.EdgeInsets.only(top: 10.0),
-      child: pw.Text(
-        'Página ${context.pageNumber} de ${context.pagesCount}',
-        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
-      ),
+      child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
     );
   }
 }
