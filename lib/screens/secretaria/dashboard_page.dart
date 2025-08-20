@@ -1,8 +1,9 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:projetos/screens/models/membro.dart';
 import 'package:projetos/services/cadastro_service.dart';
+
+import '../../models/membro.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -252,24 +253,19 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildContribuicaoChart(List<Membro> membros) {
+    // CORREÇÃO: Lógica para contar anos quitados
     final Map<String, int> contribuicaoCount = {};
     for (var membro in membros) {
       membro.contribuicao.forEach((year, data) {
-        if (data is Map) {
-          final meses = data['meses'] as Map<String, dynamic>?;
-          if (meses != null) {
-            final paidMonthsInYear = meses.values.where((isPaid) => isPaid == true).length;
-            if (paidMonthsInYear > 0) {
-              contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + paidMonthsInYear;
-            }
-          }
+        if (data is Map && data['quitado'] == true) {
+          contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
         }
       });
     }
 
     final sortedKeys = contribuicaoCount.keys.toList()..sort();
     if (sortedKeys.isEmpty) {
-      return _buildChartCard(title: 'Meses Pagos por Ano', chart: const Center(child: Text("Nenhum dado de contribuição.")));
+      return _buildChartCard(title: 'Membros com Ano Quitado', chart: const Center(child: Text("Nenhum dado de contribuição encontrado.")));
     }
 
     final List<FlSpot> spots = sortedKeys.map((year) {
@@ -277,7 +273,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }).toList();
 
     return _buildChartCard(
-      title: 'Total de Meses Pagos por Ano',
+      title: 'Total de Membros com Ano Quitado',
       chart: LineChart(
         LineChartData(
           gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1)),

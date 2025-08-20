@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:projetos/screens/models/membro.dart';
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
+import '../../models/membro.dart';
 import 'widgets/membro_form_dialog.dart';
 
 class _PageDependencies {
@@ -48,7 +48,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     ]);
     return _PageDependencies(
       situacoes: results[0] as Map<String, String>,
-      anosContribuicao: (results[1] as List<String>)..sort(), // Garante ordem crescente
+      anosContribuicao: (results[1] as List<String>)..sort(),
       departamentos: results[2] as List<String>,
     );
   }
@@ -66,6 +66,41 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     ).then((_) => setState(() {
       _dependenciesFuture = _loadDependencies();
     }));
+  }
+
+  void _deleteMember(Membro membro) {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Text('Confirmar Exclusão'),
+          content: Text('Tem certeza que deseja excluir o membro "${membro.nome}"? Esta ação não pode ser desfeita.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                _cadastroService.deleteMembro(membro.id!).then((_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Membro "${membro.nome}" excluído com sucesso.'), backgroundColor: Colors.green)
+                  );
+                }).catchError((error) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erro ao excluir membro: $error'), backgroundColor: Colors.red)
+                  );
+                });
+                Navigator.of(ctx).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -87,7 +122,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
             return Center(child: Text('Erro ao carregar dependências: ${dependenciesSnapshot.error}'));
           }
           final dependencies = dependenciesSnapshot.data!;
-          return Column(
+          return ListView(
             children: [
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -131,67 +166,68 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                   ],
                 ),
               ),
-              Expanded(
-                child: StreamBuilder<List<Membro>>(
-                  stream: _cadastroService.getMembros(),
-                  builder: (context, membrosSnapshot) {
-                    if (membrosSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (!membrosSnapshot.hasData || membrosSnapshot.data!.isEmpty) {
-                      return const Center(child: Text('Nenhum membro cadastrado.'));
-                    }
-                    final filteredMembers = membrosSnapshot.data!.where((membro) {
-                      final statusMatch = _selectedStatusId == null || membro.situacaoSEAE.toString() == _selectedStatusId;
-                      final departmentMatch = _selectedDepartment == null || membro.atividades.contains(_selectedDepartment);
+              StreamBuilder<List<Membro>>(
+                stream: _cadastroService.getMembros(),
+                builder: (context, membrosSnapshot) {
+                  if (membrosSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!membrosSnapshot.hasData || membrosSnapshot.data!.isEmpty) {
+                    return const Center(child: Text('Nenhum membro cadastrado.'));
+                  }
+                  final filteredMembers = membrosSnapshot.data!.where((membro) {
+                    final statusMatch = _selectedStatusId == null || membro.situacaoSEAE.toString() == _selectedStatusId;
+                    final departmentMatch = _selectedDepartment == null || membro.atividades.contains(_selectedDepartment);
+                    final contributionMatch = () {
+                      if (_selectedContributionYear == null) return true;
+                      final anoData = membro.contribuicao[_selectedContributionYear];
+                      if (anoData is Map) {
+                        final mesesData = anoData['meses'];
+                        if (mesesData is Map) return mesesData.values.any((pago) => pago == true);
+                      }
+                      return false;
+                    }();
+                    final searchTermMatch = _searchTerm.isEmpty ||
+                        membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                        membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                        membro.dadosPessoais.cpf.contains(_searchTerm);
+                    return statusMatch && searchTermMatch && departmentMatch && contributionMatch;
+                  }).toList();
 
-                      final contributionMatch = () {
-                        if (_selectedContributionYear == null) {
-                          return true;
-                        }
-                        final anoData = membro.contribuicao[_selectedContributionYear];
-                        if (anoData is Map) {
-                          final mesesData = anoData['meses'];
-                          if (mesesData is Map) {
-                            return mesesData.values.any((pago) => pago == true);
-                          }
-                        }
-                        return false;
-                      }();
+                  filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
 
-                      final searchTermMatch = _searchTerm.isEmpty ||
-                          membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-                          membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-                          membro.dadosPessoais.cpf.contains(_searchTerm);
-                      return statusMatch && searchTermMatch && departmentMatch && contributionMatch;
-                    }).toList();
-                    filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
-                    if (filteredMembers.isEmpty) {
-                      return const Center(child: Text('Nenhum membro encontrado com os filtros aplicados.'));
-                    }
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      itemCount: filteredMembers.length,
-                      itemBuilder: (context, index) {
-                        final membro = filteredMembers[index];
+                  if (filteredMembers.isEmpty) {
+                    return const Center(child: Padding(padding: EdgeInsets.all(32.0), child: Text('Nenhum membro encontrado com os filtros aplicados.')));
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      children: filteredMembers.map((membro) {
                         return MemberListItem(
                           membro: membro,
                           onEdit: () => _showMemberForm(membro: membro),
+                          onDelete: () => _deleteMember(membro),
                           canEdit: canEdit,
                           situacoes: dependencies.situacoes,
                           allAnosContribuicao: dependencies.anosContribuicao,
                         );
-                      },
-                    );
-                  },
-                ),
+                      }).toList(),
+                    ),
+                  );
+                },
               ),
             ],
           );
         },
       ),
       floatingActionButton: canEdit
-          ? FloatingActionButton(onPressed: () => _showMemberForm(), tooltip: 'Adicionar Membro', child: const Icon(Icons.add))
+          ? FloatingActionButton(
+        onPressed: () => _showMemberForm(),
+        tooltip: 'Adicionar Membro',
+        backgroundColor: const Color.fromRGBO(45, 55, 131, 1),
+        child: const Icon(Icons.add, color: Colors.white),
+      )
           : null,
     );
   }
@@ -251,6 +287,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 class MemberListItem extends StatelessWidget {
   final Membro membro;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
   final bool canEdit;
   final Map<String, String> situacoes;
   final List<String> allAnosContribuicao;
@@ -259,6 +296,7 @@ class MemberListItem extends StatelessWidget {
     super.key,
     required this.membro,
     required this.onEdit,
+    required this.onDelete,
     required this.canEdit,
     required this.situacoes,
     required this.allAnosContribuicao,
@@ -301,33 +339,80 @@ class MemberListItem extends StatelessWidget {
           backgroundImage: membro.foto.isNotEmpty ? NetworkImage(membro.foto) : null,
           child: membro.foto.isEmpty ? const Icon(Icons.person) : null,
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              membro.nome,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 4),
-            Wrap(
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            const breakpoint = 400.0;
+            final showHorizontalLayout = constraints.maxWidth > breakpoint;
+
+            final statusWidget = Wrap(
               spacing: 8.0,
               runSpacing: 4.0,
+              alignment: showHorizontalLayout ? WrapAlignment.end : WrapAlignment.start,
               children: [
                 if (isMembroInativo)
-                  Text(situacaoNome, style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold))
+                  Text(situacaoNome, style: const TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold))
                 else ...[
                   if (situacaoNome.isNotEmpty)
-                    Text(situacaoNome, style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                    Text(situacaoNome, style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
                   if (activities.isNotEmpty)
-                    Text(activities, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                  Text(contributionStatus.text, style: TextStyle(fontSize: 11, color: contributionStatus.color)),
+                    Text(activities, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(contributionStatus.text, style: TextStyle(fontSize: 12, color: contributionStatus.color)),
                 ]
               ],
+            );
+
+            Widget titleContent;
+            if (showHorizontalLayout) {
+              titleContent = Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      membro.nome,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  statusWidget,
+                ],
+              );
+            } else {
+              titleContent = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    membro.nome,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 6),
+                  statusWidget,
+                ],
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
+              child: titleContent,
+            );
+          },
+        ),
+        trailing: canEdit
+            ? Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar Membro',
+              onPressed: onEdit,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              tooltip: 'Excluir Membro',
+              onPressed: onDelete,
             ),
           ],
-        ),
-        trailing: canEdit ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: onEdit) : null,
+        )
+            : null,
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),

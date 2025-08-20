@@ -3,12 +3,11 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:projetos/screens/models/membro.dart';
+import '../models/membro.dart';
 
 class CadastroService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // MODIFICADO: Getter agora é público
   CollectionReference get membrosCollection =>
       _firestore.collection('bases/base_cadastral/membros');
 
@@ -77,6 +76,63 @@ class CadastroService {
     final data = snapshot.data() as Map<String, dynamic>;
     final mediunidades = List<dynamic>.from(data['mediunidades'] ?? []);
     return mediunidades.map((tipo) => tipo.toString()).toList();
+  }
+
+  // NOVO: Função para validar o formato do CPF
+  bool isCpfValid(String cpf) {
+    cpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cpf.length != 11) return false;
+    if (RegExp(r'^(\d)\1{10}$').hasMatch(cpf)) return false;
+
+    List<int> digits = cpf.split('').map((d) => int.parse(d)).toList();
+
+    int sum1 = 0;
+    for (int i = 0; i < 9; i++) {
+      sum1 += digits[i] * (10 - i);
+    }
+    int verifier1 = (sum1 * 10) % 11;
+    if (verifier1 == 10) verifier1 = 0;
+    if (verifier1 != digits[9]) return false;
+
+    int sum2 = 0;
+    for (int i = 0; i < 10; i++) {
+      sum2 += digits[i] * (11 - i);
+    }
+    int verifier2 = (sum2 * 10) % 11;
+    if (verifier2 == 10) verifier2 = 0;
+    if (verifier2 != digits[10]) return false;
+
+    return true;
+  }
+
+  // NOVO: Verifica se o CPF já existe no banco, ignorando o membro atual
+  Future<bool> isCpfUnique(String cpf, {String? currentMemberId}) async {
+    if (cpf.isEmpty) return true;
+    final query = membrosCollection.where('dados_pessoais.cpf', isEqualTo: cpf);
+    final snapshot = await query.get();
+
+    if (snapshot.docs.isEmpty) {
+      return true;
+    }
+    if (currentMemberId != null && snapshot.docs.length == 1 && snapshot.docs.first.id == currentMemberId) {
+      return true;
+    }
+    return false;
+  }
+
+  // NOVO: Verifica se o E-mail já existe no banco, ignorando o membro atual
+  Future<bool> isEmailUnique(String email, {String? currentMemberId}) async {
+    if (email.isEmpty) return true;
+    final query = membrosCollection.where('dados_pessoais.e-mail', isEqualTo: email);
+    final snapshot = await query.get();
+
+    if (snapshot.docs.isEmpty) {
+      return true;
+    }
+    if (currentMemberId != null && snapshot.docs.length == 1 && snapshot.docs.first.id == currentMemberId) {
+      return true;
+    }
+    return false;
   }
 
   Future<String> uploadProfileImage({

@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:projetos/screens/models/user_permissions.dart';
+import '../models/user_permissions.dart';
 
 class AuthService with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -83,7 +83,9 @@ class AuthService with ChangeNotifier {
       return 'Ocorreu um erro desconhecido.';
     } on FirebaseAuthException catch (e) {
       if (e.code == 'popup-closed-by-user' ||
-          e.code == 'cancelled-popup-request') return 'Login cancelado.';
+          e.code == 'cancelled-popup-request') {
+        return 'Login cancelado.';
+      }
       return 'Ocorreu um erro durante o login.';
     } catch (e) {
       return 'Ocorreu um erro inesperado.';

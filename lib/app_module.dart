@@ -1,10 +1,10 @@
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:projetos/screens/home/home_screen.dart';
-import 'package:projetos/screens/home/pages/dij/dij_page.dart';
-import 'package:projetos/screens/home/pages/secretaria/dashboard_page.dart';
-import 'package:projetos/screens/home/pages/secretaria/gestao_membros_page.dart';
-import 'package:projetos/screens/home/pages/secretaria/relatorios_membros_page.dart';
-import 'package:projetos/screens/login_screen.dart';
+import 'package:projetos/screens/dij/dij_page.dart';
+import 'package:projetos/screens/home_screen.dart';
+import 'package:projetos/screens/auth/login_screen.dart';
+import 'package:projetos/screens/secretaria/dashboard_page.dart';
+import 'package:projetos/screens/secretaria/gestao_membros_page.dart';
+import 'package:projetos/screens/secretaria/relatorios_membros_page.dart';
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
