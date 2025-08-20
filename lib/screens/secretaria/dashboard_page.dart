@@ -163,6 +163,7 @@ class _DashboardPageState extends State<DashboardPage> {
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (group) => Colors.blueGrey,
+              // Corrigido: Adicionado o parâmetro 'rodIndex'
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 String weekDay = situacaoCount.keys.elementAt(group.x.toInt());
                 return BarTooltipItem(
@@ -342,11 +343,9 @@ class _DashboardPageState extends State<DashboardPage> {
       membro.contribuicao.forEach((year, data) {
         if (data is Map) {
           final meses = data['meses'] as Map<String, dynamic>?;
-          if (meses != null) {
-            final paidMonthsInYear = meses.values.where((isPaid) => isPaid == true).length;
-            if (paidMonthsInYear > 0) {
-              contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + paidMonthsInYear;
-            }
+          // Verifica se há pelo menos um mês pago para contar o ano
+          if (meses != null && meses.values.any((isPaid) => isPaid == true)) {
+            contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
           }
         }
       });
@@ -354,7 +353,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final sortedKeys = contribuicaoCount.keys.toList()..sort();
     if (sortedKeys.isEmpty) {
-      return _buildChartCard(title: 'Meses Pagos por Ano', chart: const Center(child: Text("Nenhum dado de contribuição.")));
+      return _buildChartCard(title: 'Total de Membros Contribuintes por Ano', chart: const Center(child: Text("Nenhum dado de contribuição.")));
     }
 
     final List<FlSpot> spots = sortedKeys.map((year) {
@@ -362,13 +361,22 @@ class _DashboardPageState extends State<DashboardPage> {
     }).toList();
 
     return _buildChartCard(
-      title: 'Total de Meses Pagos por Ano',
+      title: 'Total de Membros Contribuintes por Ano',
       chart: LineChart(
         LineChartData(
           lineTouchData: LineTouchData(
             handleBuiltInTouches: true,
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (touchedSpot) => const Color.fromRGBO(96, 125, 139, 0.8),
+              // Corrigido: Usando getTooltipItems em vez de getTooltipItem
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((touchedSpot) {
+                  return LineTooltipItem(
+                    'Ano: ${touchedSpot.x.toInt()}\nMembros: ${touchedSpot.y.toInt()}',
+                    const TextStyle(color: Colors.white, fontSize: 12),
+                  );
+                }).toList();
+              },
             ),
           ),
           gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1)),
@@ -401,7 +409,7 @@ class _DashboardPageState extends State<DashboardPage> {
           minX: double.parse(sortedKeys.first),
           maxX: double.parse(sortedKeys.last),
           minY: 0,
-          maxY: contribuicaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) * 1.2,
+          maxY: (contribuicaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) * 1.2).ceilToDouble(),
           lineBarsData: [
             LineChartBarData(
               spots: spots,

@@ -1,3 +1,5 @@
+// lib/screens/secretaria/gestao_membros_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/services/auth_service.dart';
@@ -28,9 +30,10 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   final AuthService _authService = Modular.get<AuthService>();
   final TextEditingController _searchController = TextEditingController();
   String _searchTerm = '';
-  String? _selectedStatusId;
-  String? _selectedDepartment;
-  String? _selectedContributionYear;
+
+  List<String> _selectedStatusIds = [];
+  List<String> _selectedDepartments = [];
+  List<String> _selectedContributionYears = [];
   Future<_PageDependencies>? _dependenciesFuture;
 
   @override
@@ -180,17 +183,12 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                     return const Center(child: Text('Nenhum membro cadastrado.'));
                   }
                   final filteredMembers = membrosSnapshot.data!.where((membro) {
-                    final statusMatch = _selectedStatusId == null || membro.situacaoSEAE.toString() == _selectedStatusId;
-                    final departmentMatch = _selectedDepartment == null || membro.atividades.contains(_selectedDepartment);
-                    final contributionMatch = () {
-                      if (_selectedContributionYear == null) return true;
-                      final anoData = membro.contribuicao[_selectedContributionYear];
-                      if (anoData is Map) {
-                        final mesesData = anoData['meses'];
-                        if (mesesData is Map) return mesesData.values.any((pago) => pago == true);
-                      }
-                      return false;
-                    }();
+                    final statusMatch = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
+                    final departmentMatch = _selectedDepartments.isEmpty || membro.atividades.any((depto) => _selectedDepartments.contains(depto));
+                    final contributionMatch = _selectedContributionYears.isEmpty || _selectedContributionYears.any((year) {
+                      final anoData = membro.contribuicao[year];
+                      return anoData is Map && anoData['meses'] is Map && (anoData['meses'] as Map).values.any((pago) => pago == true);
+                    });
                     final searchTermMatch = _searchTerm.isEmpty ||
                         membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
                         membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase()) ||
@@ -237,44 +235,67 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Widget _buildStatusFilter(Map<String, String> situacoes) {
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedStatusId,
-      hint: const Text('Situação...'),
-      isExpanded: true,
-      decoration: _filterDecoration(),
-      items: [
-        const DropdownMenuItem<String>(value: null, child: Text('Todas as Situações')),
-        ...situacoes.entries.map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value))),
-      ],
-      onChanged: (value) => setState(() => _selectedStatusId = value),
+    return InkWell(
+      onTap: () => _showMultiSelectDialog(
+        title: 'Filtrar por Situação',
+        options: situacoes,
+        selectedOptions: _selectedStatusIds,
+        onConfirm: (values) {
+          setState(() {
+            _selectedStatusIds = values;
+          });
+        },
+      ),
+      child: InputDecorator(
+        decoration: _filterDecoration().copyWith(labelText: 'Situação'),
+        child: Text(_selectedStatusIds.isEmpty
+            ? 'Todas as Situações'
+            : '${_selectedStatusIds.length} Selecionada(s)'),
+      ),
     );
   }
 
   Widget _buildDepartmentFilter(List<String> departamentos) {
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedDepartment,
-      hint: const Text('Departamento...'),
-      isExpanded: true,
-      decoration: _filterDecoration(),
-      items: [
-        const DropdownMenuItem<String>(value: null, child: Text('Todos os Departamentos')),
-        ...departamentos.map((depto) => DropdownMenuItem<String>(value: depto, child: Text(depto))),
-      ],
-      onChanged: (value) => setState(() => _selectedDepartment = value),
+    final Map<String, String> deptoMap = {for (var depto in departamentos) depto: depto};
+    return InkWell(
+      onTap: () => _showMultiSelectDialog(
+        title: 'Filtrar por Departamento',
+        options: deptoMap,
+        selectedOptions: _selectedDepartments,
+        onConfirm: (values) {
+          setState(() {
+            _selectedDepartments = values;
+          });
+        },
+      ),
+      child: InputDecorator(
+        decoration: _filterDecoration().copyWith(labelText: 'Departamento'),
+        child: Text(_selectedDepartments.isEmpty
+            ? 'Todos os Departamentos'
+            : '${_selectedDepartments.length} Selecionado(s)'),
+      ),
     );
   }
 
   Widget _buildContributionYearFilter(List<String> anos) {
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedContributionYear,
-      hint: const Text('Ano Contribuição...'),
-      isExpanded: true,
-      decoration: _filterDecoration(),
-      items: [
-        const DropdownMenuItem<String>(value: null, child: Text('Qualquer Ano')),
-        ...anos.map((ano) => DropdownMenuItem<String>(value: ano, child: Text('Contribuiu em $ano'))),
-      ],
-      onChanged: (value) => setState(() => _selectedContributionYear = value),
+    final Map<String, String> anosMap = {for (var ano in anos) ano: ano};
+    return InkWell(
+      onTap: () => _showMultiSelectDialog(
+        title: 'Filtrar por Ano de Contribuição',
+        options: anosMap,
+        selectedOptions: _selectedContributionYears,
+        onConfirm: (values) {
+          setState(() {
+            _selectedContributionYears = values;
+          });
+        },
+      ),
+      child: InputDecorator(
+        decoration: _filterDecoration().copyWith(labelText: 'Ano Contribuição'),
+        child: Text(_selectedContributionYears.isEmpty
+            ? 'Qualquer Ano'
+            : '${_selectedContributionYears.length} Selecionado(s)'),
+      ),
     );
   }
 
@@ -284,6 +305,61 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       fillColor: Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+    );
+  }
+
+  void _showMultiSelectDialog({
+    required String title,
+    required Map<String, String> options,
+    required List<String> selectedOptions,
+    required Function(List<String>) onConfirm,
+  }) {
+    final List<String> tempSelected = List.from(selectedOptions);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(title),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: options.entries.map((entry) {
+                    final isSelected = tempSelected.contains(entry.key);
+                    return CheckboxListTile(
+                      title: Text(entry.value),
+                      value: isSelected,
+                      onChanged: (bool? value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            tempSelected.add(entry.key);
+                          } else {
+                            tempSelected.remove(entry.key);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    onConfirm(tempSelected);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Confirmar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -308,24 +384,35 @@ class MemberListItem extends StatelessWidget {
 
   ({String text, Color color}) _getContributionStatus() {
     final bool isSocio = [3, 4].contains(membro.situacaoSEAE);
-    if (!isSocio) {
+    final bool shouldBeContributor = isSocio && (membro.situacaoSEAE == 4 || membro.listaContribuintes);
+
+    if (!shouldBeContributor) {
       return (text: 'Não Contribuinte', color: Colors.blue);
     }
+
     final int currentYear = DateTime.now().year;
-    for (final yearStr in allAnosContribuicao) {
-      final year = int.tryParse(yearStr) ?? 0;
-      if (year < currentYear) {
-        final anoData = membro.contribuicao[yearStr];
-        if (anoData is Map && (anoData['quitado'] == null || anoData['quitado'] == false)) {
-          final mesesData = anoData['meses'] as Map<String, dynamic>?;
-          if (mesesData != null && mesesData.values.any((pago) => !pago)) {
-            return (text: 'Contribuição em Atraso', color: Colors.orange);
-          }
-        }
+
+    // Prioridade 1: Verifica se há alguma contribuição no ano atual.
+    final currentYearStr = currentYear.toString();
+    final currentYearData = membro.contribuicao[currentYearStr];
+    if (currentYearData is Map && currentYearData['meses'] is Map && (currentYearData['meses'] as Map).values.any((pago) => pago == true)) {
+      return (text: 'Contribuinte', color: Colors.green);
+    }
+
+    // Prioridade 2: Se não há contribuição no ano atual, verifica atrasos de anos passados.
+    final yearsBeforeCurrent = allAnosContribuicao.where((yearStr) => int.tryParse(yearStr)! < currentYear).toList();
+    for (final yearStr in yearsBeforeCurrent) {
+      final anoData = membro.contribuicao[yearStr];
+      // Se a contribuição para um ano anterior não foi quitada, está em atraso.
+      if (anoData is! Map || anoData['quitado'] == false) {
+        return (text: 'Contribuição em Atraso', color: Colors.orange);
       }
     }
-    return (text: 'Contribuinte', color: Colors.green);
+
+    // Prioridade 3: Se não há atrasos passados e nem contribuição no ano atual.
+    return (text: 'Contribuição em Atraso', color: Colors.orange);
   }
+
 
   @override
   Widget build(BuildContext context) {
