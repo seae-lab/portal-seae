@@ -1,4 +1,3 @@
-// lib/screens/home/pages/secretaria/controle_contribuicoes_page.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -14,8 +13,7 @@ class ControleContribuicoesPage extends StatefulWidget {
   const ControleContribuicoesPage({super.key});
 
   @override
-  State<ControleContribuicoesPage> createState() =>
-      _ControleContribuicoesPageState();
+  State<ControleContribuicoesPage> createState() => _ControleContribuicoesPageState();
 }
 
 class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
@@ -25,11 +23,9 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   bool _isLoading = true;
   String? _error;
 
-  // Estados dos filtros
   String? _selectedYear;
-  String? _selectedStatusId;
+  List<String> _selectedStatusIds = [];
 
-  // Listas para os filtros
   List<String> _availableYears = [];
   Map<String, String> _situacoesMap = {};
 
@@ -79,10 +75,8 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   void _applyFilters() {
     List<Membro> filtered = List.from(_allMembers);
 
-    if (_selectedStatusId != null) {
-      filtered = filtered
-          .where((m) => m.situacaoSEAE.toString() == _selectedStatusId)
-          .toList();
+    if (_selectedStatusIds.isNotEmpty) {
+      filtered = filtered.where((m) => _selectedStatusIds.contains(m.situacaoSEAE.toString())).toList();
     }
 
     filtered.sort((a, b) => a.nome.compareTo(b.nome));
@@ -95,8 +89,8 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   Future<Uint8List> _buildPdfBytes() async {
     final pdf = pw.Document();
     final year = _selectedYear ?? DateTime.now().year.toString();
-    final List<String> meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    final List<String> mesesKeys = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    final List<String> meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
     const checkMark = '✓';
     const emptyBox = '☐';
@@ -104,10 +98,8 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     final headers = ['Nome', 'Dados At.', ...meses];
 
     final data = _filteredMembers.map((membro) {
-      final contribuicaoAno =
-          membro.contribuicao[year] as Map<String, dynamic>? ?? {};
-      final mesesData =
-          contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+      final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
+      final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
 
       final row = <String>[];
       row.add(membro.nome);
@@ -129,7 +121,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
             textStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18),
           ),
           pw.TableHelper.fromTextArray(
-            context: context, // O 'context' vem do builder do MultiPage
+            context: context,
             headers: headers,
             data: data,
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -147,9 +139,8 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   Future<void> _generateAndDownloadPdf() async {
     final bytes = await _buildPdfBytes();
     if (kIsWeb) {
-      // FINAL CORRECTION: Convert the inner Uint8List, then the list.
       final blob = web.Blob(
-        [bytes.toJS].toJS, // Correct conversion
+        [bytes.toJS].toJS,
         web.BlobPropertyBag(type: 'application/pdf'),
       );
       final url = web.URL.createObjectURL(blob);
@@ -176,31 +167,6 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Controle de Contribuições - ${_selectedYear ?? ''}'),
-        actions: [
-          if (!_isLoading && _filteredMembers.isNotEmpty)
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _generateAndDownloadPdf,
-                  icon: const Icon(Icons.picture_as_pdf, size: 18),
-                  label: const Text('Gerar PDF'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      textStyle: const TextStyle(fontSize: 12)),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.print),
-                  tooltip: 'Imprimir Relatório',
-                  onPressed: _generateAndPrintPdf,
-                ),
-                const SizedBox(width: 16),
-              ],
-            )
-        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -228,8 +194,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
               decoration: const InputDecoration(
                 labelText: 'Ano',
                 border: OutlineInputBorder(),
-                contentPadding:
-                EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               items: _availableYears.map((year) {
                 return DropdownMenuItem(value: year, child: Text(year));
@@ -245,43 +210,103 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
           const SizedBox(width: 16),
           Expanded(
             flex: 3,
-            child: DropdownButtonFormField<String>(
-              initialValue: _selectedStatusId,
-              hint: const Text('Todas as Situações'),
-              decoration: const InputDecoration(
-                labelText: 'Situação',
-                border: OutlineInputBorder(),
-                contentPadding:
-                EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              items: [
-                const DropdownMenuItem<String>(
-                    value: null, child: Text('Todas as Situações')),
-                ..._situacoesMap.entries.map((entry) =>
-                    DropdownMenuItem<String>(
-                        value: entry.key, child: Text(entry.value))),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _selectedStatusId = value;
-                  _applyFilters();
-                });
-              },
-            ),
+            child: _buildMultiSelectStatusFilter(),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildMultiSelectStatusFilter() {
+    return InkWell(
+      onTap: () => _showMultiSelectStatusDialog(),
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Situação',
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+        child: _selectedStatusIds.isEmpty
+            ? const Text('Todas as Situações')
+            : Wrap(
+          spacing: 6.0,
+          runSpacing: 6.0,
+          children: _selectedStatusIds.map((id) {
+            return Chip(
+              label: Text(_situacoesMap[id] ?? 'N/D'),
+              onDeleted: () {
+                setState(() {
+                  _selectedStatusIds.remove(id);
+                  _applyFilters();
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMultiSelectStatusDialog() async {
+    final List<String> tempSelected = List.from(_selectedStatusIds);
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Selecione as Situações'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _situacoesMap.entries.map((entry) {
+                    final isSelected = tempSelected.contains(entry.key);
+                    return CheckboxListTile(
+                      title: Text(entry.value),
+                      value: isSelected,
+                      onChanged: (bool? value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            tempSelected.add(entry.key);
+                          } else {
+                            tempSelected.remove(entry.key);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedStatusIds = tempSelected;
+                      _applyFilters();
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Confirmar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildDataTable() {
     if (_filteredMembers.isEmpty) {
-      return const Center(
-          child: Text('Nenhum membro encontrado com os filtros selecionados.'));
+      return const Center(child: Text('Nenhum membro encontrado com os filtros selecionados.'));
     }
 
-    final List<String> meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    final List<String> mesesKeys = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    final List<String> meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
     final year = _selectedYear ?? DateTime.now().year.toString();
 
     return SingleChildScrollView(
@@ -291,18 +316,15 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: DataTable(
-            headingRowColor:
-            WidgetStateColor.resolveWith((states) => Colors.grey.shade200),
+            headingRowColor: WidgetStateColor.resolveWith((states) => Colors.grey.shade200),
             columns: [
               const DataColumn(label: Text('Nome', style: TextStyle(fontWeight: FontWeight.bold))),
               const DataColumn(label: Text('Dados\nAtualizados', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
               ...meses.map((mes) => DataColumn(label: Text(mes, style: const TextStyle(fontWeight: FontWeight.bold)))),
             ],
             rows: _filteredMembers.map((membro) {
-              final contribuicaoAno =
-                  membro.contribuicao[year] as Map<String, dynamic>? ?? {};
-              final mesesData =
-                  contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+              final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
+              final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
 
               return DataRow(cells: [
                 DataCell(Text(membro.nome)),

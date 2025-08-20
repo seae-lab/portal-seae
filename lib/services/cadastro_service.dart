@@ -1,9 +1,12 @@
+// lib/services/cadastro_service.dart
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/documento.dart';
 import '../models/membro.dart';
 
 class CadastroService {
@@ -51,10 +54,21 @@ class CadastroService {
   }
 
   Future<List<String>> getDepartamentos() async {
-    final snapshot = await _departamentosDoc.get();
-    if (!snapshot.exists || snapshot.data() == null) return [];
-    final data = snapshot.data() as Map<String, dynamic>;
-    return data.keys.toList();
+    try {
+      final snapshot = await _departamentosDoc.get();
+      if (!snapshot.exists || snapshot.data() == null) {
+        return [];
+      }
+
+      final data = snapshot.data();
+      if (data is Map<String, dynamic>) {
+        return data.keys.toList();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      return [];
+    }
   }
 
   Future<Map<String, String>> getSituacoes() async {
@@ -135,11 +149,12 @@ class CadastroService {
   }
 
   Future<String> uploadProfileImage({
-    required String memberId,
+    required String cpf,
     required Uint8List fileBytes,
   }) async {
     try {
-      final ref = _storage.ref('profile_images/$memberId.jpg');
+      final cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
+      final ref = _storage.ref('documentos/$cleanCpf/profile.jpg');
       final metadata = SettableMetadata(contentType: 'image/jpeg');
       final uploadTask = ref.putData(fileBytes, metadata);
       final snapshot = await uploadTask.whenComplete(() => {});
@@ -159,5 +174,24 @@ class CadastroService {
 
   Future<void> deleteMembro(String id) {
     return membrosCollection.doc(id).delete();
+  }
+
+  Future<Documento> uploadDocument({
+    required String cpf,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      final cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
+      final fileExtension = fileName.split('.').last.toLowerCase();
+      final ref = _storage.ref('documentos/$cleanCpf/$fileName');
+      final metadata = SettableMetadata(contentType: 'application/$fileExtension');
+      final uploadTask = ref.putData(fileBytes, metadata);
+      final snapshot = await uploadTask.whenComplete(() => {});
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      return Documento(nome: fileName, url: downloadUrl, tipo: fileExtension);
+    } catch (e) {
+      rethrow;
+    }
   }
 }

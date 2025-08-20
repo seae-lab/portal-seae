@@ -36,7 +36,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   @override
   void initState() {
     super.initState();
-    _dependenciesFuture ??= _loadDependencies();
+    _dependenciesFuture = _loadDependencies();
     _searchController.addListener(() => setState(() => _searchTerm = _searchController.text));
   }
 
@@ -63,9 +63,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     showDialog(
       context: context,
       builder: (context) => Dialog.fullscreen(child: MembroFormDialog(membro: membro)),
-    ).then((_) => setState(() {
-      _dependenciesFuture = _loadDependencies();
-    }));
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _dependenciesFuture = _loadDependencies();
+        });
+      }
+    });
   }
 
   void _deleteMember(Membro membro) {
@@ -86,13 +90,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
               child: const Text('Excluir', style: TextStyle(color: Colors.red)),
               onPressed: () {
                 _cadastroService.deleteMembro(membro.id!).then((_) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Membro "${membro.nome}" excluído com sucesso.'), backgroundColor: Colors.green)
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Membro "${membro.nome}" excluído com sucesso.'), backgroundColor: Colors.green));
+                  }
                 }).catchError((error) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Erro ao excluir membro: $error'), backgroundColor: Colors.red)
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir membro: $error'), backgroundColor: Colors.red));
+                  }
                 });
                 Navigator.of(ctx).pop();
               },
@@ -452,8 +456,7 @@ class MemberListItem extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(year, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                                if(isQuitado)
-                                  const Chip(label: Text('Ano Quitado'), backgroundColor: Colors.lightGreenAccent, padding: EdgeInsets.zero)
+                                if (isQuitado) const Chip(label: Text('Ano Quitado'), backgroundColor: Colors.lightGreenAccent, padding: EdgeInsets.zero)
                               ],
                             ),
                             const SizedBox(height: 4),
@@ -473,8 +476,7 @@ class MemberListItem extends StatelessWidget {
                                       decoration: BoxDecoration(
                                           color: isPaid ? Colors.green[100] : Colors.grey[200],
                                           borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: isPaid ? Colors.green : Colors.grey.shade300)
-                                      ),
+                                          border: Border.all(color: isPaid ? Colors.green : Colors.grey.shade300)),
                                       child: Center(child: Text(mesAbrev, style: TextStyle(fontSize: 10, color: isPaid ? Colors.green[800] : Colors.grey[600]))),
                                     ),
                                   );

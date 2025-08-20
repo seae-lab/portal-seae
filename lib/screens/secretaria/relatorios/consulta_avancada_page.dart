@@ -72,8 +72,6 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
       _resultados = [];
       _activeColumns.clear();
       _activeColumns.addAll(['nome', 'dados_pessoais.cpf']);
-      // **LÓGICA ATUALIZADA AQUI**
-      // Adiciona a coluna de todos os filtros presentes, mesmo que o valor esteja vazio.
       for (var filter in _filters) {
         _activeColumns.add(filter.field);
       }
@@ -84,7 +82,6 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
 
       List<Membro> filteredMembers = allMembers.where((membro) {
         return _filters.every((filter) {
-          // Se o valor do filtro for vazio, ele não restringe a busca.
           if (filter.value.isEmpty) return true;
           return _checkMatch(membro, filter);
         });
@@ -168,7 +165,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
             textStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18),
           ),
           pw.TableHelper.fromTextArray(
-            context: context, // Adiciona o 'context' do builder
+            context: context,
             headers: headers,
             data: data,
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -187,7 +184,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
     final bytes = await _buildPdfBytes();
     if (kIsWeb) {
       final blob = web.Blob(
-        [bytes.toJS].toJS, // Correct conversion
+        [bytes.toJS].toJS,
         web.BlobPropertyBag(type: 'application/pdf'),
       );
       final url = web.URL.createObjectURL(blob);

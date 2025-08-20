@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dados_pessoais.dart';
+import 'documento.dart'; // Importa o novo modelo
 
 class Membro {
   String? id;
@@ -9,7 +10,6 @@ class Membro {
   bool atualizacao;
   String atualizacaoCD;
   String atualizacaoCF;
-  // MODIFICADO: A estrutura agora é um mapa dinâmico para suportar o status 'quitado'
   Map<String, dynamic> contribuicao;
   DadosPessoais dadosPessoais;
   String dataAprovacaoCD;
@@ -23,6 +23,7 @@ class Membro {
   int situacaoSEAE;
   List<String> tiposMediunidade;
   bool transfAutomatica;
+  List<Documento> documentos;
 
   Membro({
     this.id,
@@ -45,9 +46,11 @@ class Membro {
     this.situacaoSEAE = 0,
     List<String>? tiposMediunidade,
     this.transfAutomatica = false,
+    List<Documento>? documentos,
   })  : atividades = atividades ?? [],
         contribuicao = contribuicao ?? {},
-        tiposMediunidade = tiposMediunidade ?? [];
+        tiposMediunidade = tiposMediunidade ?? [],
+        documentos = documentos ?? [];
 
   factory Membro.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
@@ -57,13 +60,11 @@ class Membro {
 
     rawContribuicao.forEach((year, value) {
       if (value is Map) {
-        // Novo formato: {'2024': {'quitado': bool, 'meses': { ... }}}
         contribuicaoMap[year] = {
           'quitado': value['quitado'] ?? false,
           'meses': Map<String, bool>.from(value['meses']?.cast<String, bool>() ?? {}),
         };
       } else if (value is bool) {
-        // Formato antigo: {'2024': true} -> converte para o novo formato
         contribuicaoMap[year] = {
           'quitado': value,
           'meses': { for (var m in meses) m: value },
@@ -79,7 +80,7 @@ class Membro {
       atualizacao: data['atualizacao'] ?? false,
       atualizacaoCD: data['atualizacao_CD'] ?? '',
       atualizacaoCF: data['atualizacao_CF'] ?? '',
-      contribuicao: contribuicaoMap,
+      contribuicao: contribuicaoMap, // CORREÇÃO APLICADA AQUI
       dadosPessoais: DadosPessoais.fromMap(data['dados_pessoais'] ?? {}),
       dataAprovacaoCD: data['data_aprovacao_CD'] ?? '',
       dataAtualizacao: data['data_atualizacao'] ?? '',
@@ -92,6 +93,10 @@ class Membro {
       situacaoSEAE: data['situacao_SEAE'] ?? 0,
       tiposMediunidade: List<String>.from(data['tipos_mediunidade'] ?? []),
       transfAutomatica: data['transf_automatica'] ?? false,
+      documentos: (data['documentos'] as List<dynamic>?)
+          ?.map((docData) => Documento.fromMap(docData))
+          .toList() ??
+          [],
     );
   }
 
@@ -116,6 +121,7 @@ class Membro {
       'situacao_SEAE': situacaoSEAE,
       'tipos_mediunidade': tiposMediunidade,
       'transf_automatica': transfAutomatica,
+      'documentos': documentos.map((doc) => doc.toMap()).toList(),
     };
   }
 }
