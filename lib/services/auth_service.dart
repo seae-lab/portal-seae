@@ -1,8 +1,12 @@
+// lib/services/auth_service.dart
+
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_modular/flutter_modular.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../models/user_permissions.dart';
+import 'package:projetos/models/user_permissions.dart'; // Corrigi o caminho do import
 
 class AuthService with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -13,127 +17,134 @@ class AuthService with ChangeNotifier {
         : null,
   );
 
-  Stream<User?> get user => _auth.authStateChanges();
   UserPermissions? currentUserPermissions;
+  StreamSubscription? _authSubscription;
 
-  /// Método privado para buscar e configurar as permissões de um usuário no Firestore.
-  /// Retorna 'true' se as permissões foram carregadas com sucesso.
-  Future<bool> _fetchAndSetPermissions(User user) async {
-    final docSnapshot =
-    await _firestore.collection('base_permissoes').doc(user.email).get();
+  // Completer para sinalizar que a verificação inicial de auth foi concluída.
+  final Completer<void> _initialAuthCheckCompleter = Completer<void>();
+  // Futuro público que a SplashScreen pode aguardar.
+  Future<void> get initialAuthCheck => _initialAuthCheckCompleter.future;
 
-    if (!docSnapshot.exists) {
-      await signOut(); // Garante que o usuário seja deslogado se não tiver um documento de permissão
-      return false;
-    }
-
-    final permissionsData = docSnapshot.data() as Map<String, dynamic>;
-    currentUserPermissions = UserPermissions.fromMap(permissionsData);
-
-    if (!currentUserPermissions!.hasAnyRole) {
-      await signOut(); // Garante que o usuário seja deslogado se não tiver nenhum papel ativo
-      return false;
-    }
-
-    notifyListeners();
-    return true; // Permissões carregadas com sucesso
+  AuthService() {
+    _listenToAuthChanges();
   }
 
-  /// Tenta logar o usuário com o Google e carregar suas permissões.
+  void _listenToAuthChanges() {
+    _authSubscription?.cancel();
+    _authSubscription = _auth.authStateChanges().listen((user) async {
+      if (user != null) {
+        await _fetchAndSetPermissions(user);
+      } else {
+        currentUserPermissions = null;
+      }
+
+      if (!_initialAuthCheckCompleter.isCompleted) {
+        _initialAuthCheckCompleter.complete();
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<bool> _fetchAndSetPermissions(User user) async {
+    try {
+      final docSnapshot =
+      await _firestore.collection('base_permissoes').doc(user.email).get();
+
+      if (!docSnapshot.exists || docSnapshot.data() == null) {
+        currentUserPermissions = null;
+        return false;
+      }
+
+      final permissions = UserPermissions.fromMap(docSnapshot.data()!);
+      if (!permissions.hasAnyRole) {
+        currentUserPermissions = null;
+        return false;
+      }
+
+      currentUserPermissions = permissions;
+      return true;
+    } catch (e) {
+      currentUserPermissions = null;
+      return false;
+    }
+  }
+
   Future<String?> signInWithGoogle() async {
     try {
-      late UserCredential userCredential;
-      if (kIsWeb) {
-        GoogleAuthProvider googleProvider = GoogleAuthProvider();
-        googleProvider.setCustomParameters({'prompt': 'select_account'});
-        userCredential = await _auth.signInWithPopup(googleProvider);
+      final User? user = await _getGoogleUser();
+      if (user == null) return 'Login cancelado ou falhou.';
+
+      if (!user.email!.endsWith('@seae.org.br')) {
+        await signOut();
+        return 'Acesso permitido apenas para contas @seae.org.br.';
+      }
+
+      final bool hasPermissions = await _fetchAndSetPermissions(user);
+      if (hasPermissions) {
+        notifyListeners();
+        return null;
       } else {
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-        if (googleUser == null) return 'Login cancelado pelo usuário.';
-        final GoogleSignInAuthentication googleAuth =
-        await googleUser.authentication;
-        if (googleAuth.idToken == null) {
-          await signOut();
-          return 'Não foi possível obter o token do Google.';
-        }
-        final OAuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-        userCredential = await _auth.signInWithCredential(credential);
+        await signOut();
+        return 'Este usuário não possui nenhum papel atribuído no sistema.';
       }
-
-      final User? user = userCredential.user;
-
-      if (user != null) {
-        if (!user.email!.endsWith('@seae.org.br')) {
-          await signOut();
-          return 'Acesso permitido apenas para contas @seae.org.br.';
-        }
-
-        // Usa o método centralizado para buscar permissões
-        final bool hasPermissions = await _fetchAndSetPermissions(user);
-
-        if (hasPermissions) {
-          return null; // Sucesso
-        } else {
-          return 'Este usuário não possui nenhum papel atribuído no sistema.';
-        }
-      }
-      return 'Ocorreu um erro desconhecido.';
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'popup-closed-by-user' ||
-          e.code == 'cancelled-popup-request') {
+      if (e.code == 'popup-closed-by-user' || e.code == 'cancelled-popup-request') {
         return 'Login cancelado.';
       }
-      return 'Ocorreu um erro durante o login.';
+      return 'Erro de autenticação: ${e.message}';
     } catch (e) {
       return 'Ocorreu um erro inesperado.';
     }
   }
 
-  /// Tenta carregar as permissões para o usuário atualmente logado (usado no refresh).
+  Future<User?> _getGoogleUser() async {
+    UserCredential userCredential;
+    if (kIsWeb) {
+      GoogleAuthProvider googleProvider = GoogleAuthProvider();
+      googleProvider.setCustomParameters({'prompt': 'select_account'});
+      userCredential = await _auth.signInWithPopup(googleProvider);
+    } else {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      userCredential = await _auth.signInWithCredential(credential);
+    }
+    return userCredential.user;
+  }
+
   Future<bool> tryToLoadPermissionsForCurrentUser() async {
     final user = _auth.currentUser;
-    if (user != null) {
-      // Se as permissões já foram carregadas, não busca de novo
-      if (currentUserPermissions != null) return true;
-
-      // Se não, busca no Firestore
-      return await _fetchAndSetPermissions(user);
-    }
-    return false;
+    return user != null ? await _fetchAndSetPermissions(user) : false;
   }
 
-  /// Determina a rota inicial para o usuário com base em seus papéis.
   String getInitialRouteForUser() {
     if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
-      return '/';
+      return '/login';
     }
-
-    final mainPageRoutes = {
-      'admin': '/home/dashboard',
-      'secretaria': '/home/dashboard',
-      'dij': '/home/dij',
-    };
-
-    for (var entry in mainPageRoutes.entries) {
-      final role = entry.key;
-      final route = entry.value;
-      if (currentUserPermissions!.hasRole(role)) {
-        return route;
-      }
+    if (currentUserPermissions!.hasRole('admin') || currentUserPermissions!.hasRole('secretaria')) {
+      return '/home/dashboard';
     }
-
-    // Fallback de segurança
-    return '/';
+    if (currentUserPermissions!.hasRole('dij')) {
+      return '/home/dij';
+    }
+    return '/login';
   }
 
-  /// Desloga o usuário de todos os serviços.
   Future<void> signOut() async {
     currentUserPermissions = null;
     await _googleSignIn.signOut();
     await _auth.signOut();
-    // notifyListeners() foi removido daqui para evitar erros de renderização durante a navegação
+    notifyListeners();
+    Modular.to.pushNamedAndRemoveUntil('/login', (_) => false);
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }

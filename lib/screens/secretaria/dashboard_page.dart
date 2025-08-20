@@ -1,3 +1,5 @@
+// lib/screens/home/pages/secretaria/dashboard_page.dart
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -15,6 +17,19 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   final CadastroService _cadastroService = Modular.get<CadastroService>();
   late Future<DashboardData> _dashboardDataFuture;
+  int touchedIndex = -1; // Para interatividade do gráfico de pizza
+
+  // Paleta de cores moderna para os gráficos
+  final List<Color> _colorPalette = [
+    Colors.cyan.shade400,
+    Colors.amber.shade400,
+    Colors.pink.shade400,
+    Colors.green.shade400,
+    Colors.purple.shade400,
+    Colors.orange.shade400,
+    Colors.teal.shade400,
+    Colors.red.shade400,
+  ];
 
   @override
   void initState() {
@@ -69,7 +84,7 @@ class _DashboardPageState extends State<DashboardPage> {
               padding: const EdgeInsets.all(16.0),
               children: [
                 Text(
-                  'Visão Geral - Total de ${totalMembros} membros',
+                  'Visão Geral - Total de $totalMembros membros',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black87),
                 ),
                 const SizedBox(height: 24),
@@ -112,8 +127,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildChartCard({required String title, required Widget chart}) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 4,
+      shadowColor: const Color.fromRGBO(0, 0, 0, 0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: Colors.white,
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -143,23 +159,50 @@ class _DashboardPageState extends State<DashboardPage> {
       chart: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: situacaoCount.values.fold(0, (max, v) => v > max ? v : max).toDouble() * 1.2,
+          maxY: situacaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) * 1.2,
+          barTouchData: BarTouchData(
+            touchTooltipData: BarTouchTooltipData(
+              getTooltipColor: (group) => Colors.blueGrey,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                String weekDay = situacaoCount.keys.elementAt(group.x.toInt());
+                return BarTooltipItem(
+                  '$weekDay\n',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  children: <TextSpan>[
+                    TextSpan(
+                      text: (rod.toY - 1).toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
           barGroups: situacaoCount.entries.map((entry) {
             final index = situacaoCount.keys.toList().indexOf(entry.key);
             return BarChartGroupData(
               x: index,
               barRods: [
                 BarChartRodData(
-                  toY: entry.value.toDouble(),
-                  width: 18,
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4)),
+                  toY: entry.value.toDouble() + 1, // Add 1 to avoid zero height issues
+                  width: 22,
+                  borderRadius: const BorderRadius.all(Radius.circular(6)),
                   gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade700],
+                    colors: [Colors.blue.shade400, Colors.blue.shade800],
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                   ),
                 ),
               ],
+              showingTooltipIndicators: [0],
             );
           }).toList(),
           titlesData: FlTitlesData(
@@ -171,7 +214,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   if (index >= 0 && index < situacaoCount.keys.length) {
                     return Padding(
                       padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(situacaoCount.keys.elementAt(index), style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                      child: Text(
+                        situacaoCount.keys.elementAt(index),
+                        style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
+                      ),
                     );
                   }
                   return const Text('');
@@ -179,93 +225,136 @@ class _DashboardPageState extends State<DashboardPage> {
                 reservedSize: 32,
               ),
             ),
-            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32, interval: (situacaoCount.values.fold(0, (max, v) => v > max ? v : max) / 5).ceilToDouble())),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 32,
+                interval: (situacaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) / 5).ceilToDouble(),
+                getTitlesWidget: (value, meta) => Text('${value.toInt()}', style: const TextStyle(fontSize: 11)),
+              ),
+            ),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           borderData: FlBorderData(show: false),
-          gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: (situacaoCount.values.fold(0, (max, v) => v > max ? v : max) / 5).ceilToDouble(), getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1)),
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: (situacaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) / 5).ceilToDouble(),
+            getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildDepartamentoChart(List<Membro> membros, List<String> departamentos) {
-    final Map<String, int> deptoCount = { for (var d in departamentos) d : 0 };
+    final Map<String, int> deptoCount = {for (var d in departamentos) d: 0};
+    int totalAtividades = 0;
     for (var membro in membros) {
       for (var atividade in membro.atividades) {
         if (deptoCount.containsKey(atividade)) {
           deptoCount[atividade] = deptoCount[atividade]! + 1;
+          totalAtividades++;
         }
       }
     }
     deptoCount.removeWhere((key, value) => value == 0);
-    final List<Color> colors = [Colors.cyan, Colors.amber, Colors.pink, Colors.green, Colors.purple, Colors.orange];
 
     final List<PieChartSectionData> sections = deptoCount.entries.map((entry) {
       final index = deptoCount.keys.toList().indexOf(entry.key);
+      final isTouched = index == touchedIndex;
+      final fontSize = isTouched ? 18.0 : 14.0;
+      final radius = isTouched ? 120.0 : 110.0;
+      final percentage = totalAtividades > 0 ? (entry.value / totalAtividades * 100).toStringAsFixed(1) : "0.0";
+
       return PieChartSectionData(
         value: entry.value.toDouble(),
-        title: '${entry.value}',
-        titleStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, shadows: [Shadow(color: Colors.black26, blurRadius: 2)]),
-        radius: 110,
-        color: colors[index % colors.length],
+        title: '$percentage%',
+        titleStyle: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          shadows: const [Shadow(color: Colors.black38, blurRadius: 3)],
+        ),
+        radius: radius,
+        color: _colorPalette[index % _colorPalette.length],
+        borderSide: isTouched
+            ? BorderSide(color: _colorPalette[index % _colorPalette.length].withAlpha(204), width: 6)
+            : const BorderSide(color: Color.fromRGBO(255, 255, 255, 0)),
+        badgeWidget: _buildChartBadge(entry.key, _colorPalette[index % _colorPalette.length]),
+        badgePositionPercentageOffset: .98,
       );
     }).toList();
 
     return _buildChartCard(
       title: 'Membros por Departamento',
-      chart: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: PieChart(
-              PieChartData(
-                sections: sections,
-                borderData: FlBorderData(show: false),
-                sectionsSpace: 2,
-                centerSpaceRadius: 45,
-              ),
-            ),
+      chart: PieChart(
+        PieChartData(
+          pieTouchData: PieTouchData(
+            touchCallback: (FlTouchEvent event, pieTouchResponse) {
+              setState(() {
+                if (!event.isInterestedForInteractions || pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
+                  touchedIndex = -1;
+                  return;
+                }
+                touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+              });
+            },
           ),
-          const SizedBox(width: 20),
-          Expanded(
-            flex: 1,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: deptoCount.keys.map((name) {
-                final index = deptoCount.keys.toList().indexOf(name);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: Row(children: [
-                    Container(width: 12, height: 12, color: colors[index % colors.length]),
-                    const SizedBox(width: 8),
-                    Text(name, style: const TextStyle(fontSize: 13)),
-                  ]),
-                );
-              }).toList(),
-            ),
+          sections: sections,
+          borderData: FlBorderData(show: false),
+          sectionsSpace: 2,
+          centerSpaceRadius: 45,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChartBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: const Color.fromRGBO(0, 0, 0, 0.25),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
       ),
     );
   }
 
   Widget _buildContribuicaoChart(List<Membro> membros) {
-    // CORREÇÃO: Lógica para contar anos quitados
     final Map<String, int> contribuicaoCount = {};
     for (var membro in membros) {
       membro.contribuicao.forEach((year, data) {
-        if (data is Map && data['quitado'] == true) {
-          contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
+        if (data is Map) {
+          final meses = data['meses'] as Map<String, dynamic>?;
+          if (meses != null) {
+            final paidMonthsInYear = meses.values.where((isPaid) => isPaid == true).length;
+            if (paidMonthsInYear > 0) {
+              contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + paidMonthsInYear;
+            }
+          }
         }
       });
     }
 
     final sortedKeys = contribuicaoCount.keys.toList()..sort();
     if (sortedKeys.isEmpty) {
-      return _buildChartCard(title: 'Membros com Ano Quitado', chart: const Center(child: Text("Nenhum dado de contribuição encontrado.")));
+      return _buildChartCard(title: 'Meses Pagos por Ano', chart: const Center(child: Text("Nenhum dado de contribuição.")));
     }
 
     final List<FlSpot> spots = sortedKeys.map((year) {
@@ -273,9 +362,15 @@ class _DashboardPageState extends State<DashboardPage> {
     }).toList();
 
     return _buildChartCard(
-      title: 'Total de Membros com Ano Quitado',
+      title: 'Total de Meses Pagos por Ano',
       chart: LineChart(
         LineChartData(
+          lineTouchData: LineTouchData(
+            handleBuiltInTouches: true,
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (touchedSpot) => const Color.fromRGBO(96, 125, 139, 0.8),
+            ),
+          ),
           gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (value) => const FlLine(color: Colors.black12, strokeWidth: 1)),
           titlesData: FlTitlesData(
             bottomTitles: AxisTitles(
@@ -286,12 +381,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 getTitlesWidget: (value, meta) {
                   return Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(value.toInt().toString(), style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    child: Text(value.toInt().toString(), style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500)),
                   );
                 },
               ),
             ),
-            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, interval: (contribuicaoCount.values.fold(0, (max, v) => v > max ? v : max) / 5).ceilToDouble())),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                interval: (contribuicaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) / 5).ceilToDouble(),
+                getTitlesWidget: (value, meta) => Text('${value.toInt()}', style: const TextStyle(fontSize: 11)),
+              ),
+            ),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
@@ -299,19 +401,25 @@ class _DashboardPageState extends State<DashboardPage> {
           minX: double.parse(sortedKeys.first),
           maxX: double.parse(sortedKeys.last),
           minY: 0,
-          maxY: contribuicaoCount.values.fold(0, (max, v) => v > max ? v : max).toDouble() * 1.2,
+          maxY: contribuicaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) * 1.2,
           lineBarsData: [
             LineChartBarData(
               spots: spots,
               isCurved: true,
-              gradient: LinearGradient(colors: [Colors.green.shade300, Colors.green.shade700]),
-              barWidth: 4,
+              gradient: LinearGradient(colors: [Colors.green.shade300, Colors.green.shade800]),
+              barWidth: 5,
               isStrokeCapRound: true,
-              dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 5, color: Colors.green.shade800, strokeWidth: 1, strokeColor: Colors.white)),
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 6, color: Colors.green.shade800, strokeWidth: 2, strokeColor: Colors.white),
+              ),
               belowBarData: BarAreaData(
                 show: true,
                 gradient: LinearGradient(
-                  colors: [Colors.green.shade300.withOpacity(0.3), Colors.green.shade700.withOpacity(0.0)],
+                  colors: [
+                    Colors.green.shade300.withAlpha(77),
+                    Colors.green.shade800.withAlpha(0)
+                  ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),

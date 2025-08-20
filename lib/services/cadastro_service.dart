@@ -3,11 +3,13 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
+
 import '../models/membro.dart';
 
 class CadastroService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // CORREÇÃO: Getter da coleção de membros agora é público.
   CollectionReference get membrosCollection =>
       _firestore.collection('bases/base_cadastral/membros');
 
@@ -78,7 +80,6 @@ class CadastroService {
     return mediunidades.map((tipo) => tipo.toString()).toList();
   }
 
-  // NOVO: Função para validar o formato do CPF
   bool isCpfValid(String cpf) {
     cpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
     if (cpf.length != 11) return false;
@@ -105,7 +106,6 @@ class CadastroService {
     return true;
   }
 
-  // NOVO: Verifica se o CPF já existe no banco, ignorando o membro atual
   Future<bool> isCpfUnique(String cpf, {String? currentMemberId}) async {
     if (cpf.isEmpty) return true;
     final query = membrosCollection.where('dados_pessoais.cpf', isEqualTo: cpf);
@@ -120,7 +120,6 @@ class CadastroService {
     return false;
   }
 
-  // NOVO: Verifica se o E-mail já existe no banco, ignorando o membro atual
   Future<bool> isEmailUnique(String email, {String? currentMemberId}) async {
     if (email.isEmpty) return true;
     final query = membrosCollection.where('dados_pessoais.e-mail', isEqualTo: email);

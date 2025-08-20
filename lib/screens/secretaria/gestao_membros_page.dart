@@ -234,13 +234,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
   Widget _buildStatusFilter(Map<String, String> situacoes) {
     return DropdownButtonFormField<String>(
-      value: _selectedStatusId,
+      initialValue: _selectedStatusId,
       hint: const Text('Situação...'),
       isExpanded: true,
       decoration: _filterDecoration(),
       items: [
         const DropdownMenuItem<String>(value: null, child: Text('Todas as Situações')),
-        ...situacoes.entries.map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value))).toList(),
+        ...situacoes.entries.map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value))),
       ],
       onChanged: (value) => setState(() => _selectedStatusId = value),
     );
@@ -248,13 +248,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
   Widget _buildDepartmentFilter(List<String> departamentos) {
     return DropdownButtonFormField<String>(
-      value: _selectedDepartment,
+      initialValue: _selectedDepartment,
       hint: const Text('Departamento...'),
       isExpanded: true,
       decoration: _filterDecoration(),
       items: [
         const DropdownMenuItem<String>(value: null, child: Text('Todos os Departamentos')),
-        ...departamentos.map((depto) => DropdownMenuItem<String>(value: depto, child: Text(depto))).toList(),
+        ...departamentos.map((depto) => DropdownMenuItem<String>(value: depto, child: Text(depto))),
       ],
       onChanged: (value) => setState(() => _selectedDepartment = value),
     );
@@ -262,13 +262,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
   Widget _buildContributionYearFilter(List<String> anos) {
     return DropdownButtonFormField<String>(
-      value: _selectedContributionYear,
+      initialValue: _selectedContributionYear,
       hint: const Text('Ano Contribuição...'),
       isExpanded: true,
       decoration: _filterDecoration(),
       items: [
         const DropdownMenuItem<String>(value: null, child: Text('Qualquer Ano')),
-        ...anos.map((ano) => DropdownMenuItem<String>(value: ano, child: Text('Contribuiu em $ano'))).toList(),
+        ...anos.map((ano) => DropdownMenuItem<String>(value: ano, child: Text('Contribuiu em $ano'))),
       ],
       onChanged: (value) => setState(() => _selectedContributionYear = value),
     );
@@ -484,7 +484,7 @@ class MemberListItem extends StatelessWidget {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                 ],
               ),
             ),

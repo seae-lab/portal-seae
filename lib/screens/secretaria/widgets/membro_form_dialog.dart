@@ -1,3 +1,5 @@
+// lib/screens/home/pages/secretaria/widgets/membro_form_dialog.dart
+
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -5,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../models/dados_pessoais.dart';
 import '../../../models/membro.dart';
 
@@ -31,10 +34,20 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   List<String> _allAnosContribuicao = [];
   List<String> _allTiposMediunidade = [];
 
+  // CORREÇÃO: Mapa para separar a chave de armazenamento do rótulo de exibição.
   final Map<String, String> _meses = {
-    'janeiro': 'Janeiro', 'fevereiro': 'Fevereiro', 'marco': 'Março', 'abril': 'Abril',
-    'maio': 'Maio', 'junho': 'Junho', 'julho': 'Julho', 'agosto': 'Agosto',
-    'setembro': 'Setembro', 'outubro': 'Outubro', 'novembro': 'Novembro', 'dezembro': 'Dezembro',
+    'janeiro': 'Janeiro',
+    'fevereiro': 'Fevereiro',
+    'marco': 'Março',
+    'abril': 'Abril',
+    'maio': 'Maio',
+    'junho': 'Junho',
+    'julho': 'Julho',
+    'agosto': 'Agosto',
+    'setembro': 'Setembro',
+    'outubro': 'Outubro',
+    'novembro': 'Novembro',
+    'dezembro': 'Dezembro',
   };
 
   final List<String> _sexoOptions = ['Masculino', 'Feminino', 'Não especificado'];
@@ -48,9 +61,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   final _bairroController = TextEditingController();
   final _cidadeController = TextEditingController();
   final _ufController = TextEditingController();
-  final _cpfController = TextEditingController();
-  final _emailController = TextEditingController();
-
   final _cepMask = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
   final _celularMask = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _telefoneMask = MaskTextInputFormatter(mask: '(##) ####-####', filter: {"#": RegExp(r'[0-9]')});
@@ -96,8 +106,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       _bairroController.text = _formData.dadosPessoais.bairro;
       _cidadeController.text = _formData.dadosPessoais.cidade;
       _ufController.text = _formData.dadosPessoais.naturalidadeUF;
-      _cpfController.text = _formData.dadosPessoais.cpf;
-      _emailController.text = _formData.dadosPessoais.email;
     } else {
       _formData = Membro(nome: '', dadosPessoais: DadosPessoais());
     }
@@ -111,14 +119,14 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     _bairroController.dispose();
     _cidadeController.dispose();
     _ufController.dispose();
-    _cpfController.dispose();
-    _emailController.dispose();
     super.dispose();
   }
 
   void _onCepChanged() {
     final cep = _cepMask.getUnmaskedText();
-    if (cep.length == 8) _fetchCep(cep);
+    if (cep.length == 8) {
+      _fetchCep(cep);
+    }
   }
 
   Future<void> _fetchCep(String cep) async {
@@ -184,29 +192,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       setState(() => _isSaving = true);
-
-      final cpf = _cpfController.text;
-      final email = _emailController.text.trim();
-
       try {
-        if (cpf.isNotEmpty) {
-          final isUnique = await _cadastroService.isCpfUnique(cpf, currentMemberId: _formData.id);
-          if (!isUnique && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Este CPF já está cadastrado.'), backgroundColor: Colors.red));
-            setState(() => _isSaving = false);
-            return;
-          }
-        }
-
-        if (email.isNotEmpty) {
-          final isUnique = await _cadastroService.isEmailUnique(email, currentMemberId: _formData.id);
-          if (!isUnique && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Este e-mail já está cadastrado.'), backgroundColor: Colors.red));
-            setState(() => _isSaving = false);
-            return;
-          }
-        }
-
         if (_isNewMember) {
           final DocumentReference docRef = await _cadastroService.membrosCollection.add(_formData.toFirestore());
           _formData.id = docRef.id;
@@ -215,20 +201,25 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
           _formData.foto = await _cadastroService.uploadProfileImage(memberId: _formData.id!, fileBytes: _newImageBytes!);
         }
         await _cadastroService.saveMembro(_formData);
-        if (mounted) Navigator.of(context).pop();
-
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
         }
       } finally {
-        if (mounted) setState(() => _isSaving = false);
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
       }
     }
   }
 
   void _toggleAllMonths(String year, bool? value) {
-    if (value == null) return;
+    if (value == null) {
+      return;
+    }
     setState(() {
       final mesesKeys = _meses.keys.toList();
       for (var mes in mesesKeys) {
@@ -306,7 +297,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             children: [
               _buildTextField(label: 'Nome Completo', initialValue: _formData.nome, onSaved: (v) => _formData.nome = v!, isRequired: true),
               DropdownButtonFormField<String>(
-                value: _formData.situacaoSEAE > 0 && _allSituacoes.containsKey(_formData.situacaoSEAE.toString()) ? _formData.situacaoSEAE.toString() : null,
+                initialValue: _formData.situacaoSEAE > 0 && _allSituacoes.containsKey(_formData.situacaoSEAE.toString()) ? _formData.situacaoSEAE.toString() : null,
                 decoration: const InputDecoration(labelText: 'Situação SEAE', border: OutlineInputBorder()),
                 items: _allSituacoes.entries.map((entry) => DropdownMenuItem<String>(value: entry.key, child: Text(entry.value))).toList(),
                 onChanged: (String? newValue) => setState(() => _formData.situacaoSEAE = int.tryParse(newValue ?? '0') ?? 0),
@@ -324,8 +315,11 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
                     selected: isSelected,
                     onSelected: (bool selected) {
                       setState(() {
-                        if (selected) _formData.atividades.add(deptoAbreviacao);
-                        else _formData.atividades.remove(deptoAbreviacao);
+                        if (selected) {
+                          _formData.atividades.add(deptoAbreviacao);
+                        } else {
+                          _formData.atividades.remove(deptoAbreviacao);
+                        }
                       });
                     },
                   );
@@ -363,35 +357,12 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             children: [
               Text('Informações Pessoais', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              _buildTextField(
-                label: 'Email',
-                controller: _emailController,
-                onSaved: (v) => _formData.dadosPessoais.email = v!,
-                validator: (value) {
-                  if (value != null && value.isNotEmpty && !RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                    return 'Formato de e-mail inválido.';
-                  }
-                  return null;
-                },
-              ),
+              _buildTextField(label: 'Email', initialValue: _formData.dadosPessoais.email, onSaved: (v) => _formData.dadosPessoais.email = v!),
               _buildTextField(label: 'Celular', initialValue: _formData.dadosPessoais.celular, onSaved: (v) => _formData.dadosPessoais.celular = v!, mask: _celularMask, isNumeric: true),
               _buildTextField(label: 'Telefone Residencial', initialValue: _formData.dadosPessoais.telResidencia, onSaved: (v) => _formData.dadosPessoais.telResidencia = v!, mask: _telefoneMask, isNumeric: true),
               _buildTextField(label: 'Telefone Comercial', initialValue: _formData.dadosPessoais.telComercial, onSaved: (v) => _formData.dadosPessoais.telComercial = v!, mask: _telefoneMask, isNumeric: true),
               _buildTextField(label: 'Data de Nascimento', initialValue: _formData.dadosPessoais.dataNascimento, onSaved: (v) => _formData.dadosPessoais.dataNascimento = v!, mask: _dataMask, isNumeric: true),
-              _buildTextField(
-                label: 'CPF',
-                controller: _cpfController,
-                onSaved: (v) => _formData.dadosPessoais.cpf = v!,
-                mask: _cpfMask,
-                isNumeric: true,
-                validator: (value) {
-                  final unmasked = _cpfMask.getUnmaskedText();
-                  if (unmasked.isNotEmpty && !_cadastroService.isCpfValid(unmasked)) {
-                    return 'CPF inválido.';
-                  }
-                  return null;
-                },
-              ),
+              _buildTextField(label: 'CPF', initialValue: _formData.dadosPessoais.cpf, onSaved: (v) => _formData.dadosPessoais.cpf = v!, mask: _cpfMask, isNumeric: true),
               _buildTextField(label: 'RG', initialValue: _formData.dadosPessoais.rg, onSaved: (v) => _formData.dadosPessoais.rg = v!),
               _buildTextField(label: 'Orgão Exp. RG', initialValue: _formData.dadosPessoais.rgOrgaoExpedidor, onSaved: (v) => _formData.dadosPessoais.rgOrgaoExpedidor = v!),
               _buildDropdown(label: 'Sexo', value: _formData.dadosPessoais.sexo, items: _sexoOptions, onChanged: (val) => setState(() => _formData.dadosPessoais.sexo = val ?? ''), onSaved: (val) => _formData.dadosPessoais.sexo = val ?? ''),
@@ -495,7 +466,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     );
   }
 
-  Widget _buildTextField({ required String label, required Function(String?) onSaved, String? initialValue, TextEditingController? controller, MaskTextInputFormatter? mask, bool isNumeric = false, bool isRequired = false, String? Function(String?)? validator, }) {
+  Widget _buildTextField({ required String label, required Function(String?) onSaved, String? initialValue, TextEditingController? controller, MaskTextInputFormatter? mask, bool isNumeric = false, bool isRequired = false }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
@@ -504,15 +475,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
         inputFormatters: mask != null ? [mask] : null,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
-        validator: (v) {
-          if (isRequired && (v == null || v.isEmpty)) {
-            return '$label é obrigatório';
-          }
-          if (validator != null) {
-            return validator(v);
-          }
-          return null;
-        },
+        validator: (v) => (isRequired && (v == null || v.isEmpty)) ? '$label é obrigatório' : null,
         onSaved: onSaved,
       ),
     );
@@ -522,7 +485,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: DropdownButtonFormField<String>(
-        value: value.isNotEmpty && items.contains(value) ? value : null,
+        initialValue: value.isNotEmpty && items.contains(value) ? value : null,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         items: items.map((String item) => DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
         onChanged: onChanged,

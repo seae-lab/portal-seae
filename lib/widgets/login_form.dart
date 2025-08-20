@@ -1,5 +1,7 @@
+// lib/widgets/login_form.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter_modular/flutter_modular.dart'; // 1. Import do Modular
+import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/auth_service.dart';
 
@@ -18,20 +20,17 @@ class _LoginFormState extends State<LoginForm> {
       _isLoading = true;
     });
 
-    // 2. Usando Modular.get() em vez de Provider.of() - ISTO CORRIGE O CRASH
     final authService = Modular.get<AuthService>();
     final result = await authService.signInWithGoogle();
 
     if (mounted) {
-      setState(() { _isLoading = false; });
-
       if (result != null) {
-        // Mostra o erro
+        setState(() { _isLoading = false; });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
       } else {
-        // SUCESSO! Pergunta ao AuthService qual é a rota certa
         final initialRoute = authService.getInitialRouteForUser();
-        Modular.to.navigate(initialRoute);
+        // Correção final: limpa a pilha de navegação para não poder voltar ao login
+        Modular.to.pushNamedAndRemoveUntil(initialRoute, (_) => false);
       }
     }
   }
@@ -42,7 +41,6 @@ class _LoginFormState extends State<LoginForm> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Usando sua logo em PNG, que sabemos que funciona.
         Image.asset(
           'assets/images/logo_SEAE_azul.png',
           height: 80,
@@ -57,7 +55,6 @@ class _LoginFormState extends State<LoginForm> {
         if (_isLoading)
           const Center(child: CircularProgressIndicator())
         else
-        // Um botão único e simples para todas as plataformas.
           ElevatedButton.icon(
             icon: SvgPicture.asset(
               'assets/images/google_logo.svg',
