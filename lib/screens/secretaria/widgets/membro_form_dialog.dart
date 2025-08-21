@@ -334,7 +334,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   Future<void> _pickAndUploadDocument() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
     );
 
     if (result != null) {

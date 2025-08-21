@@ -7,12 +7,14 @@ import 'package:projetos/screens/secretaria/dashboard_page.dart';
 import 'package:projetos/screens/secretaria/gestao_membros_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/colaboradores_departamento_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/controle_contribuicoes_page.dart';
+import 'package:projetos/screens/secretaria/relatorios/proposta_social_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/socios_promoviveis_page.dart';
+import 'package:projetos/screens/secretaria/relatorios/termo_adesao_page.dart';
 import 'package:projetos/screens/secretaria/relatorios_membros_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/consulta_avancada_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/socios_elegiveis_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/socios_votantes_page.dart';
-import 'package:projetos/screens/splash_screen.dart'; // Importe a nova tela
+import 'package:projetos/screens/splash_screen.dart';
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
@@ -27,10 +29,7 @@ class AppModule extends Module {
 
   @override
   void routes(r) {
-    // Rota inicial agora é a SplashScreen
     r.child('/', child: (context) => const SplashScreen());
-
-    // Rota de login
     r.child('/login', child: (context) => const LoginScreen());
 
     r.child('/home',
@@ -64,6 +63,13 @@ class AppModule extends Module {
           ChildRoute('/colaboradores_departamento',
               child: (context) => const ColaboradoresDepartamentoPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+          ChildRoute('/proposta_social',
+              child: (context) => const PropostaSocialPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+          ChildRoute('/termo_adesao',
+              child: (context) => const TermoAdesaoPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+
           ChildRoute('/dij',
               child: (context) => const DijPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'dij'])])
