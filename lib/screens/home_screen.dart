@@ -9,7 +9,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Verifica se a tela é larga o suficiente para o menu lateral fixo
         final isDesktop = constraints.maxWidth > 700;
 
         return Scaffold(
@@ -18,10 +17,10 @@ class HomeScreen extends StatelessWidget {
               : AppBar(
             title: const Text('Painel Admin'),
           ),
-          drawer: isDesktop ? null : const SideMenuWidget(),
+          drawer: isDesktop ? null : const SideMenuWidget(isDesktop: false),
           body: Row(
             children: [
-              if (isDesktop) const SideMenuWidget(),
+              if (isDesktop) const SideMenuWidget(isDesktop: true),
               const Expanded(
                 child: RouterOutlet(),
               ),

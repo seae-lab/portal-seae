@@ -226,7 +226,8 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.vertical,
-            child: Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: DataTable(

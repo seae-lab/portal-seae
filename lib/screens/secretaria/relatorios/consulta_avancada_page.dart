@@ -130,7 +130,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
             ),
           ],
         ),
-        body: Padding(
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,62 +161,66 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
             ..._filters.asMap().entries.map((entry) {
               final idx = entry.key;
               final filter = entry.value;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: filter.field,
-                        decoration: const InputDecoration(labelText: 'Campo'),
-                        items: _availableFields.keys.map((String key) {
-                          return DropdownMenuItem<String>(
-                            value: key,
-                            child: Text(_availableFields[key]!),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            filter.field = newValue!;
-                            filter.operator = _operators.values.first; // Resetar operador
-                          });
-                        },
-                      ),
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  bool useColumn = constraints.maxWidth < 650;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Flex(
+                      direction: useColumn ? Axis.vertical : Axis.horizontal,
+                      crossAxisAlignment: useColumn ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
+                      children: [
+                        _buildFilterDropdown(
+                          label: 'Campo',
+                          value: filter.field,
+                          items: _availableFields.entries
+                              .map((e) => DropdownMenuItem<String>(
+                            value: e.key,
+                            child: Text(e.value),
+                          ))
+                              .toList(),
+                          onChanged: (newValue) {
+                            setState(() {
+                              filter.field = newValue!;
+                            });
+                          },
+                          isFlexible: !useColumn,
+                        ),
+                        if (!useColumn) const SizedBox(width: 8),
+                        if (useColumn) const SizedBox(height: 8),
+                        _buildFilterDropdown(
+                          label: 'Operador',
+                          value: filter.operator,
+                          items: _operators.entries
+                              .map((e) => DropdownMenuItem<String>(
+                            value: e.value,
+                            child: Text(e.key),
+                          ))
+                              .toList(),
+                          onChanged: (newValue) {
+                            setState(() {
+                              filter.operator = newValue!;
+                            });
+                          },
+                          isFlexible: !useColumn,
+                        ),
+                        if (!useColumn) const SizedBox(width: 8),
+                        if (useColumn) const SizedBox(height: 8),
+                        _buildFilterTextField(
+                          initialValue: filter.value,
+                          onChanged: (newValue) {
+                            filter.value = newValue;
+                          },
+                          isFlexible: !useColumn,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                          onPressed: _filters.length > 1 ? () => _removeFilter(idx) : null,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: filter.operator,
-                        decoration: const InputDecoration(labelText: 'Operador'),
-                        items: _operators.keys.map((String key) {
-                          return DropdownMenuItem<String>(
-                            value: _operators[key]!,
-                            child: Text(key),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            filter.operator = newValue!;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        initialValue: filter.value,
-                        decoration: InputDecoration(labelText: 'Valor'),
-                        onChanged: (String newValue) {
-                          filter.value = newValue;
-                        },
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle),
-                      onPressed: _filters.length > 1 ? () => _removeFilter(idx) : null,
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
             }),
             if (_filters.length < 5)
@@ -230,6 +234,37 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
       ),
     );
   }
+
+  Widget _buildFilterDropdown({
+    required String label,
+    required String value,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?> onChanged,
+    bool isFlexible = false,
+  }) {
+    final dropdown = DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      items: items,
+      onChanged: onChanged,
+    );
+    return isFlexible ? Expanded(child: dropdown) : dropdown;
+  }
+
+  Widget _buildFilterTextField({
+    required String initialValue,
+    required ValueChanged<String> onChanged,
+    bool isFlexible = false,
+  }) {
+    final textField = TextFormField(
+      initialValue: initialValue,
+      decoration: const InputDecoration(labelText: 'Valor', border: OutlineInputBorder()),
+      onChanged: onChanged,
+    );
+    return isFlexible ? Expanded(child: textField) : textField;
+  }
+
 
   Widget _buildColumnSelection() {
     return Column(
@@ -284,28 +319,24 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
 
   Widget _buildResultsSection() {
     if (_isLoading) {
-      return const Expanded(child: Center(child: CircularProgressIndicator()));
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return Expanded(
-      child: _resultados.isEmpty
-          ? const Center(child: Text('Nenhum resultado encontrado.'))
-          : SizedBox(
-        width: double.infinity,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: DataTable(
-              columns: _activeColumns.map((field) {
-                return DataColumn(label: Text(_availableFields[field] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)));
-              }).toList(),
-              rows: _resultados.map((membro) => DataRow(
-                cells: _activeColumns.map((field) {
-                  return DataCell(Text(_getCellValue(membro, field)));
-                }).toList(),
-              )).toList(),
-            ),
-          ),
+    return _resultados.isEmpty
+        ? const Center(child: Text('Nenhum resultado encontrado.'))
+        : SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: _activeColumns.map((field) {
+            return DataColumn(label: Text(_availableFields[field] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)));
+          }).toList(),
+          rows: _resultados.map((membro) => DataRow(
+            cells: _activeColumns.map((field) {
+              return DataCell(Text(_getCellValue(membro, field)));
+            }).toList(),
+          )).toList(),
         ),
       ),
     );

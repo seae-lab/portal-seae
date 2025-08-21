@@ -3,7 +3,8 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/services/auth_service.dart';
 
 class SideMenuWidget extends StatefulWidget {
-  const SideMenuWidget({super.key});
+  final bool isDesktop;
+  const SideMenuWidget({super.key, required this.isDesktop});
 
   @override
   State<SideMenuWidget> createState() => _SideMenuWidgetState();
@@ -20,12 +21,12 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      width: _isCollapsed ? 80 : 250,
+      width: _isCollapsed && widget.isDesktop ? 80 : 250,
       color: Colors.white,
       child: Column(
         children: [
           DrawerHeader(
-            child: _isCollapsed
+            child: _isCollapsed && widget.isDesktop
                 ? Image.asset('assets/icons/logo_SEAE_icon.png')
                 : Image.asset('assets/images/logo_SEAE_azul.png'),
           ),
@@ -47,7 +48,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                         context: context,
                         title: 'Secretaria',
                         icon: Icons.business_outlined,
-                        isCollapsed: _isCollapsed,
+                        isCollapsed: _isCollapsed && widget.isDesktop,
                         mainPageRoute: '/home/dashboard',
                         subItems: [
                           if (permissions?.hasRole('secretaria_dashboard') ?? false)
@@ -76,7 +77,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                       _buildSimpleMenuItem(
                         title: 'DIJ',
                         icon: Icons.book_outlined,
-                        isCollapsed: _isCollapsed,
+                        isCollapsed: _isCollapsed && widget.isDesktop,
                         route: '/home/dij',
                         isSelected: currentRoute.startsWith('/home/dij'),
                       ),
@@ -89,21 +90,22 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
           _buildSimpleMenuItem(
             title: 'Sair',
             icon: Icons.logout,
-            isCollapsed: _isCollapsed,
+            isCollapsed: _isCollapsed && widget.isDesktop,
             onTap: () async {
               await authService.signOut();
               if (context.mounted) Modular.to.navigate('/');
             },
           ),
-          IconButton(
-            icon: Icon(
-                _isCollapsed ? Icons.arrow_forward_ios : Icons.arrow_back_ios),
-            onPressed: () {
-              setState(() {
-                _isCollapsed = !_isCollapsed;
-              });
-            },
-          ),
+          if (widget.isDesktop)
+            IconButton(
+              icon: Icon(
+                  _isCollapsed ? Icons.arrow_forward_ios : Icons.arrow_back_ios),
+              onPressed: () {
+                setState(() {
+                  _isCollapsed = !_isCollapsed;
+                });
+              },
+            ),
           const SizedBox(height: 16),
         ],
       ),
@@ -120,13 +122,11 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
     required bool isExpanded,
   }) {
     if (isCollapsed) {
-      // CORREÇÃO: Quando retrátil, usamos um SizedBox com IconButton.
-      // O IconButton centraliza seu ícone por padrão.
       return SizedBox(
-        height: 56, // Altura padrão para um item de menu
+        height: 56,
         child: IconButton(
           icon: Icon(icon, color: Theme.of(context).textTheme.bodyLarge?.color),
-          tooltip: title, // Dica que aparece ao passar o mouse
+          tooltip: title,
           onPressed: () => Modular.to.navigate(mainPageRoute),
         ),
       );
@@ -140,7 +140,6 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
     );
   }
 
-  // MÉTODO ATUALIZADO
   Widget _buildSimpleMenuItem({
     required String title,
     required IconData icon,
@@ -149,14 +148,20 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
     bool isSelected = false,
     VoidCallback? onTap,
   }) {
+    final action = onTap ?? () {
+      Modular.to.navigate(route!);
+      if (!widget.isDesktop) {
+        Navigator.of(context).pop(); // Fecha o drawer no celular
+      }
+    };
+
     if (isCollapsed) {
-      // CORREÇÃO: Mesma lógica aplicada aqui para consistência.
       return SizedBox(
         height: 56,
         child: IconButton(
           icon: Icon(icon, color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).textTheme.bodyLarge?.color),
           tooltip: title,
-          onPressed: onTap ?? () => Modular.to.navigate(route!),
+          onPressed: action,
         ),
       );
     }
@@ -165,7 +170,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
       leading: Icon(icon),
       title: Text(title),
       selected: isSelected,
-      onTap: onTap ?? () => Modular.to.navigate(route!),
+      onTap: action,
     );
   }
 
@@ -179,7 +184,12 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
       child: ListTile(
         title: Text(title),
         selected: isSelected,
-        onTap: () => Modular.to.navigate(route),
+        onTap: () {
+          Modular.to.navigate(route);
+          if (!widget.isDesktop) {
+            Navigator.of(context).pop(); // Fecha o drawer no celular
+          }
+        },
         dense: true,
       ),
     );

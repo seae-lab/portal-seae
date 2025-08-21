@@ -202,17 +202,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
                   if (index >= 0 && index < situacaoCount.keys.length) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
+                    // Rotaciona o texto para melhor visualização em telas pequenas
+                    return SideTitleWidget(
+                      axisSide: meta.axisSide,
+                      angle: -0.5, // Rotação em radianos
                       child: Text(
                         situacaoCount.keys.elementAt(index),
-                        style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
+                        style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w500),
                       ),
                     );
                   }
                   return const Text('');
                 },
-                reservedSize: 32,
+                reservedSize: 40, // Aumenta o espaço reservado
               ),
             ),
             leftTitles: AxisTitles(
