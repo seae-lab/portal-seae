@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:flutter/services.dart';
@@ -27,6 +28,7 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
   bool _isLoading = true;
   String? _error;
   late DateTime _dataBase;
+  bool _isGeneratingPdf = false;
 
   static const int idSituacaoEfetivo = 4;
 
@@ -172,6 +174,7 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
   }
 
   Future<void> _gerarPdf() async {
+    setState(() => _isGeneratingPdf = true);
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
@@ -204,23 +207,31 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
     } else {
       await Printing.layoutPdf(onLayout: (format) async => bytes);
     }
+    setState(() => _isGeneratingPdf = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sócios Votantes'),
-        actions: [
-          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _membrosVotantes.isNotEmpty ? _gerarPdf : null),
-        ],
+    return LoadingOverlay(
+      isLoading: _isLoading || _isGeneratingPdf,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Sócios Votantes'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _membrosVotantes.isNotEmpty && !_isGeneratingPdf
+                  ? _gerarPdf
+                  : null,
+            ),
+          ],
+        ),
+        body: _buildBody(),
       ),
-      body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
 
     return Column(
@@ -238,32 +249,45 @@ class _SociosVotantesPageState extends State<SociosVotantesPage> {
             ],
           ),
         ),
-        _membrosVotantes.isEmpty
-            ? const Expanded(child: Center(child: Text('Nenhum sócio efetivo apto a votar encontrado.')))
-            : Column(
-          children: [
-            _buildColumnSelection(),
-            SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: DataTable(
-                    columns: _activeColumns.map((field) {
-                      return DataColumn(label: Text(_availableFields[field] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)));
-                    }).toList(),
-                    rows: _membrosVotantes.map((membro) {
-                      return DataRow(cells: _activeColumns.map((field) {
-                        return DataCell(Text(_getCellValue(membro, field)));
-                      }).toList());
-                    }).toList(),
+        if (_membrosVotantes.isEmpty && !_isLoading)
+          const Expanded(
+            child: Center(
+              child: Text('Nenhum sócio efetivo apto a votar encontrado.'),
+            ),
+          )
+        else
+          Expanded(
+            child: Column(
+              children: [
+                _buildColumnSelection(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: DataTable(
+                          columns: _activeColumns.map((field) {
+                            return DataColumn(
+                                label: Text(_availableFields[field] ?? 'N/A',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)));
+                          }).toList(),
+                          rows: _membrosVotantes.map((membro) {
+                            return DataRow(
+                                cells: _activeColumns.map((field) {
+                                  return DataCell(Text(_getCellValue(membro, field)));
+                                }).toList());
+                          }).toList(),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
       ],
     );
   }

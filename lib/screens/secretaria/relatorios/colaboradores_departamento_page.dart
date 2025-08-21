@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:flutter/services.dart';
@@ -27,6 +28,8 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
   Map<String, String> _situacoesMap = {};
   bool _isLoading = true;
   String? _error;
+  bool _isGeneratingPdf = false;
+
 
   static const List<int> idsSituacoesIncluidas = [2, 3, 4];
 
@@ -130,6 +133,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
   }
 
   Future<void> _gerarPdf() async {
+    setState(() => _isGeneratingPdf = true);
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
@@ -162,25 +166,33 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     } else {
       await Printing.layoutPdf(onLayout: (format) async => bytes);
     }
+    setState(() => _isGeneratingPdf = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Colaboradores por Departamento'),
-        actions: [
-          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _colaboradoresPorDepto.isNotEmpty ? _gerarPdf : null),
-        ],
+    return LoadingOverlay(
+      isLoading: _isLoading || _isGeneratingPdf,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Colaboradores por Departamento'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _colaboradoresPorDepto.isNotEmpty && !_isGeneratingPdf
+                  ? _gerarPdf
+                  : null,
+            ),
+          ],
+        ),
+        body: _buildBody(),
       ),
-      body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
-    if (_colaboradoresPorDepto.isEmpty) return const Center(child: Text('Nenhum colaborador encontrado para os departamentos.'));
+    if (_colaboradoresPorDepto.isEmpty && !_isLoading) return const Center(child: Text('Nenhum colaborador encontrado para os departamentos.'));
 
     final deptosOrdenados = _colaboradoresPorDepto.keys.toList()..sort();
 

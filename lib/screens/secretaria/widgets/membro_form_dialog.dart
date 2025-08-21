@@ -10,6 +10,7 @@ import 'package:projetos/models/documento.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
 
 import '../../../models/dados_pessoais.dart';
 import '../../../models/membro.dart';
@@ -30,6 +31,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   bool _isNewMember = true;
   bool _isSaving = false;
   Uint8List? _newImageBytes;
+  bool _isLoadingBases = true;
 
   final List<bool> _expansionPanelOpenState = [true, true, true, true];
 
@@ -81,14 +83,14 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   final _ufController = TextEditingController();
   final _cpfController = TextEditingController(); // Controlador para o CPF
 
+  // NOVO: Controlador para o campo de texto de novo departamento
+  final _newDepartmentController = TextEditingController();
+
   final _cepMask = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
   final _celularMask = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _telefoneMask = MaskTextInputFormatter(mask: '(##) ####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cpfMask = MaskTextInputFormatter(mask: '###.###.###-##', filter: {"#": RegExp(r'[0-9]')});
   final _dataMask = MaskTextInputFormatter(mask: '##/##/####', filter: {"#": RegExp(r'[0-9]')});
-
-  // Variáveis de estado para armazenar os dados carregados
-  bool _isLoadingBases = true;
 
   @override
   void initState() {
@@ -145,6 +147,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     _cidadeController.dispose();
     _ufController.dispose();
     _cpfController.dispose();
+    _newDepartmentController.dispose(); // NOVO: Dispose do controlador
     super.dispose();
   }
 
@@ -217,6 +220,17 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     }
   }
 
+  // NOVO: Função para adicionar um departamento manualmente
+  void _addNewDepartment() {
+    final newDepartment = _newDepartmentController.text.trim();
+    if (newDepartment.isNotEmpty && !_formData.atividades.contains(newDepartment)) {
+      setState(() {
+        _formData.atividades.add(newDepartment);
+        _newDepartmentController.clear();
+      });
+    }
+  }
+
   Future<void> _saveForm() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
@@ -227,24 +241,34 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
         // Atualiza o CPF no objeto _formData antes de salvar
         _formData.dadosPessoais.cpf = _cpfController.text;
 
+        // Verifica se é um novo membro e salva para obter o ID
         if (_isNewMember) {
           final DocumentReference docRef = await _cadastroService.membrosCollection.add(_formData.toFirestore());
           _formData.id = docRef.id;
         }
+
+        // Realiza o upload da imagem de perfil APENAS se houver uma nova imagem e o ID do membro
         if (_newImageBytes != null) {
-          final cpf = _cpfController.text.replaceAll(RegExp(r'[^0-9]'), '');
-          if (cpf.isNotEmpty) {
-            _formData.foto = await _cadastroService.uploadProfileImage(cpf: cpf, fileBytes: _newImageBytes!);
+          if (_formData.id != null && _formData.id!.isNotEmpty) {
+            _formData.foto = await _cadastroService.uploadProfileImage(
+              memberId: _formData.id!,
+              memberName: _formData.nome,
+              fileBytes: _newImageBytes!,
+            );
           } else {
+            // Caso o ID não esteja disponível (o que não deve acontecer após o 'add')
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('CPF é necessário para salvar a foto de perfil.'),
+                content: Text('ID do membro é necessário para salvar a foto de perfil.'),
                 backgroundColor: Colors.orange,
               ));
             }
           }
         }
+
+        // Salva o membro com o URL da nova foto (se houver)
         await _cadastroService.saveMembro(_formData);
+
         if (mounted) {
           Navigator.of(context).pop();
         }
@@ -332,53 +356,53 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isNewMember ? 'Adicionar Membro' : 'Editar Membro'),
-        actions: [
-          if (_isSaving) const Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator(color: Colors.white)),
-          if (!_isSaving) IconButton(icon: const Icon(Icons.save), onPressed: _saveForm, tooltip: 'Salvar')
-        ],
-      ),
-      body: _isLoadingBases
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              Center(
-                child: Column(
+    return LoadingOverlay( // Adicionado o LoadingOverlay
+      isLoading: _isSaving || _isLoadingBases,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_isNewMember ? 'Adicionar Membro' : 'Editar Membro'),
+          actions: [
+            if (!_isSaving) IconButton(icon: const Icon(Icons.save), onPressed: _saveForm, tooltip: 'Salvar')
+          ],
+        ),
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              children: [
+                Center(
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 80,
+                        backgroundImage: _newImageBytes != null
+                            ? MemoryImage(_newImageBytes!)
+                            : (_formData.foto.isNotEmpty ? NetworkImage(_formData.foto) : null) as ImageProvider?,
+                        child: _newImageBytes == null && _formData.foto.isEmpty ? const Icon(Icons.person, size: 80) : null,
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.photo_camera),
+                        label: const Text('Alterar Foto'),
+                        onPressed: _pickImage,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ExpansionPanelList(
+                  expansionCallback: (int index, bool isExpanded) {
+                    setState(() => _expansionPanelOpenState[index] = !isExpanded);
+                  },
                   children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundImage: _newImageBytes != null
-                          ? MemoryImage(_newImageBytes!)
-                          : (_formData.foto.isNotEmpty ? NetworkImage(_formData.foto) : null) as ImageProvider?,
-                      child: _newImageBytes == null && _formData.foto.isEmpty ? const Icon(Icons.person, size: 50) : null,
-                    ),
-                    TextButton.icon(
-                      icon: const Icon(Icons.photo_camera),
-                      label: const Text('Alterar Foto'),
-                      onPressed: _pickImage,
-                    ),
+                    _buildCadastroPanel(),
+                    _buildDadosPessoaisPanel(),
+                    _buildContribuicaoPanel(),
+                    _buildDocumentosPanel(),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              ExpansionPanelList(
-                expansionCallback: (int index, bool isExpanded) {
-                  setState(() => _expansionPanelOpenState[index] = !isExpanded);
-                },
-                children: [
-                  _buildCadastroPanel(),
-                  _buildDadosPessoaisPanel(),
-                  _buildContribuicaoPanel(),
-                  _buildDocumentosPanel(),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -405,20 +429,41 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             const SizedBox(height: 16),
             Text('Atividades / Departamentos', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
+            // NOVO: Adiciona o campo para entrada manual de departamento
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newDepartmentController,
+                    decoration: const InputDecoration(
+                      labelText: 'Adicionar outro departamento',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _addNewDepartment,
+                  child: const Text('Adicionar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8.0,
               runSpacing: 4.0,
-              children: _allDepartamentos.map((deptoAbreviacao) {
-                final bool isSelected = _formData.atividades.contains(deptoAbreviacao);
+              // Combina os departamentos do banco de dados com os do usuário
+              children: [..._allDepartamentos.toSet(), ..._formData.atividades].toSet().map((depto) {
+                final bool isSelected = _formData.atividades.contains(depto);
                 return FilterChip(
-                  label: Text(deptoAbreviacao),
+                  label: Text(depto),
                   selected: isSelected,
                   onSelected: (bool selected) {
                     setState(() {
                       if (selected) {
-                        _formData.atividades.add(deptoAbreviacao);
+                        _formData.atividades.add(depto);
                       } else {
-                        _formData.atividades.remove(deptoAbreviacao);
+                        _formData.atividades.remove(depto);
                       }
                     });
                   },

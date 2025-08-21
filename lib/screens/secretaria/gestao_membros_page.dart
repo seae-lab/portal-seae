@@ -6,6 +6,7 @@ import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import '../../models/membro.dart';
 import 'widgets/membro_form_dialog.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
 
 class _PageDependencies {
   final Map<String, String> situacoes;
@@ -35,25 +36,39 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   List<String> _selectedDepartments = [];
   List<String> _selectedContributionYears = [];
   Future<_PageDependencies>? _dependenciesFuture;
+  bool _isLoading = true; // Novo estado de carregamento para a página
 
   @override
   void initState() {
     super.initState();
-    _dependenciesFuture = _loadDependencies();
+    _loadDependenciesAndMembers();
     _searchController.addListener(() => setState(() => _searchTerm = _searchController.text));
   }
 
-  Future<_PageDependencies> _loadDependencies() async {
-    final results = await Future.wait([
-      _cadastroService.getSituacoes(),
-      _cadastroService.getAnosContribuicao(),
-      _cadastroService.getDepartamentos(),
-    ]);
-    return _PageDependencies(
-      situacoes: results[0] as Map<String, String>,
-      anosContribuicao: (results[1] as List<String>)..sort(),
-      departamentos: results[2] as List<String>,
-    );
+  Future<void> _loadDependenciesAndMembers() async {
+    try {
+      final results = await Future.wait([
+        _cadastroService.getSituacoes(),
+        _cadastroService.getAnosContribuicao(),
+        _cadastroService.getDepartamentos(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _dependenciesFuture = Future.value(_PageDependencies(
+            situacoes: results[0] as Map<String, String>,
+            anosContribuicao: (results[1] as List<String>)..sort(),
+            departamentos: results[2] as List<String>,
+          ));
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -69,7 +84,8 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     ).then((_) {
       if (mounted) {
         setState(() {
-          _dependenciesFuture = _loadDependencies();
+          _isLoading = true; // Inicia o loading novamente após o form ser fechado
+          _loadDependenciesAndMembers();
         });
       }
     });
@@ -91,17 +107,25 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
             ),
             TextButton(
               child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-              onPressed: () {
-                _cadastroService.deleteMembro(membro.id!).then((_) {
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                if (mounted) {
+                  setState(() => _isLoading = true);
+                }
+                try {
+                  await _cadastroService.deleteMembro(membro.id!);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Membro "${membro.nome}" excluído com sucesso.'), backgroundColor: Colors.green));
                   }
-                }).catchError((error) {
+                } catch (error) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir membro: $error'), backgroundColor: Colors.red));
                   }
-                });
-                Navigator.of(ctx).pop();
+                } finally {
+                  if (mounted) {
+                    _loadDependenciesAndMembers(); // Recarrega os dados para atualizar a lista
+                  }
+                }
               },
             ),
           ],
@@ -119,109 +143,110 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
         title: const Text('Gestão de Membros'),
         centerTitle: false,
       ),
-      body: FutureBuilder<_PageDependencies>(
-        future: _dependenciesFuture,
-        builder: (context, dependenciesSnapshot) {
-          if (dependenciesSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (dependenciesSnapshot.hasError || !dependenciesSnapshot.hasData) {
-            return Center(child: Text('Erro ao carregar dependências: ${dependenciesSnapshot.error}'));
-          }
-          final dependencies = dependenciesSnapshot.data!;
-          return ListView(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Buscar por nome, CPF, e-mail...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: Colors.white,
+      body: LoadingOverlay( // Adicionado o LoadingOverlay
+        isLoading: _isLoading,
+        child: FutureBuilder<_PageDependencies>(
+          future: _dependenciesFuture,
+          builder: (context, dependenciesSnapshot) {
+            if (dependenciesSnapshot.connectionState == ConnectionState.waiting && _isLoading) {
+              return const SizedBox.shrink(); // Retorna um widget vazio, pois o overlay já está cobrindo a tela.
+            }
+            if (dependenciesSnapshot.hasError) {
+              return Center(child: Text('Erro ao carregar dependências: ${dependenciesSnapshot.error}'));
+            }
+            if (!dependenciesSnapshot.hasData) {
+              return const Center(child: Text('Dados de dependências não disponíveis.'));
+            }
+
+            final dependencies = dependenciesSnapshot.data!;
+
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar por nome, CPF, e-mail...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth > 700) {
-                          return Row(
-                            children: [
-                              Expanded(child: _buildStatusFilter(dependencies.situacoes)),
-                              const SizedBox(width: 8),
-                              Expanded(child: _buildDepartmentFilter(dependencies.departamentos)),
-                              const SizedBox(width: 8),
-                              Expanded(child: _buildContributionYearFilter(dependencies.anosContribuicao)),
-                            ],
-                          );
-                        }
-                        return Column(
-                          children: [
-                            _buildStatusFilter(dependencies.situacoes),
-                            const SizedBox(height: 8),
-                            _buildDepartmentFilter(dependencies.departamentos),
-                            const SizedBox(height: 8),
-                            _buildContributionYearFilter(dependencies.anosContribuicao),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      _buildFilters(dependencies),
+                    ],
+                  ),
                 ),
-              ),
-              StreamBuilder<List<Membro>>(
-                stream: _cadastroService.getMembros(),
-                builder: (context, membrosSnapshot) {
-                  if (membrosSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (!membrosSnapshot.hasData || membrosSnapshot.data!.isEmpty) {
-                    return const Center(child: Text('Nenhum membro cadastrado.'));
-                  }
-                  final filteredMembers = membrosSnapshot.data!.where((membro) {
-                    final statusMatch = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
-                    final departmentMatch = _selectedDepartments.isEmpty || membro.atividades.any((depto) => _selectedDepartments.contains(depto));
-                    final contributionMatch = _selectedContributionYears.isEmpty || _selectedContributionYears.any((year) {
-                      final anoData = membro.contribuicao[year];
-                      return anoData is Map && anoData['meses'] is Map && (anoData['meses'] as Map).values.any((pago) => pago == true);
-                    });
-                    final searchTermMatch = _searchTerm.isEmpty ||
-                        membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-                        membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-                        membro.dadosPessoais.cpf.contains(_searchTerm);
-                    return statusMatch && searchTermMatch && departmentMatch && contributionMatch;
-                  }).toList();
+                Expanded(
+                  child: StreamBuilder<List<Membro>>(
+                    stream: _cadastroService.getMembros(),
+                    builder: (context, membrosSnapshot) {
+                      if (membrosSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (membrosSnapshot.hasError) {
+                        return Center(child: Text('Erro ao carregar membros: ${membrosSnapshot.error}'));
+                      }
+                      if (!membrosSnapshot.hasData || membrosSnapshot.data!.isEmpty) {
+                        return const Center(child: Text('Nenhum membro encontrado.'));
+                      }
 
-                  filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+                      final allMembers = membrosSnapshot.data!;
+                      final filteredMembers = allMembers.where((membro) {
+                        final matchesSearchTerm = _searchTerm.isEmpty ||
+                            membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                            membro.dadosPessoais.cpf.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                            membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase());
 
-                  if (filteredMembers.isEmpty) {
-                    return const Center(child: Padding(padding: EdgeInsets.all(32.0), child: Text('Nenhum membro encontrado com os filtros aplicados.')));
-                  }
+                        final matchesStatus = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(
-                      children: filteredMembers.map((membro) {
-                        return MemberListItem(
-                          membro: membro,
-                          onEdit: () => _showMemberForm(membro: membro),
-                          onDelete: () => _deleteMember(membro),
-                          canEdit: canEdit,
-                          situacoes: dependencies.situacoes,
-                          allAnosContribuicao: dependencies.anosContribuicao,
-                        );
-                      }).toList(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          );
-        },
+                        final matchesDepartment = _selectedDepartments.isEmpty || membro.atividades.any((depto) => _selectedDepartments.contains(depto));
+
+                        final matchesContributionYear = _selectedContributionYears.isEmpty ||
+                            _selectedContributionYears.any((year) {
+                              final contribuicaoAno = membro.contribuicao[year];
+                              if (contribuicaoAno is Map) {
+                                final meses = contribuicaoAno['meses'] as Map<String, dynamic>?;
+                                return meses != null && meses.values.any((pago) => pago == true);
+                              }
+                              return false;
+                            });
+
+                        return matchesSearchTerm && matchesStatus && matchesDepartment && matchesContributionYear;
+                      }).toList();
+
+                      if (filteredMembers.isEmpty) {
+                        return const Center(child: Text('Nenhum membro encontrado com os filtros selecionados.'));
+                      }
+
+                      return ListView.builder(
+                        itemCount: filteredMembers.length,
+                        itemBuilder: (context, index) {
+                          final membro = filteredMembers[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: MemberListItem(
+                              membro: membro,
+                              onEdit: () => _showMemberForm(membro: membro),
+                              onDelete: () => _deleteMember(membro),
+                              canEdit: canEdit,
+                              situacoes: dependencies.situacoes,
+                              allAnosContribuicao: dependencies.anosContribuicao,
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
       floatingActionButton: canEdit
           ? FloatingActionButton(
@@ -234,15 +259,44 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     );
   }
 
+  Widget _buildFilters(_PageDependencies dependencies) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Usa Row para telas mais largas e Column para telas mais estreitas
+        if (constraints.maxWidth > 700) {
+          return Row(
+            children: [
+              Expanded(child: _buildStatusFilter(dependencies.situacoes)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildDepartmentFilter(dependencies.departamentos)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildContributionYearFilter(dependencies.anosContribuicao)),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            _buildStatusFilter(dependencies.situacoes),
+            const SizedBox(height: 8),
+            _buildDepartmentFilter(dependencies.departamentos),
+            const SizedBox(height: 8),
+            _buildContributionYearFilter(dependencies.anosContribuicao),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildStatusFilter(Map<String, String> situacoes) {
     return InkWell(
       onTap: () => _showMultiSelectDialog(
         title: 'Filtrar por Situação',
-        options: situacoes,
-        selectedOptions: _selectedStatusIds,
+        options: situacoes.entries.map((e) => e.value).toList(),
+        selectedOptions: _selectedStatusIds.map((id) => situacoes[id] ?? id).toList(),
         onConfirm: (values) {
           setState(() {
-            _selectedStatusIds = values;
+            final Map<String, String> reversedSituacoes = situacoes.map((key, value) => MapEntry(value, key));
+            _selectedStatusIds = values.map((name) => reversedSituacoes[name] ?? '').where((id) => id.isNotEmpty).toList();
           });
         },
       ),
@@ -256,12 +310,11 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Widget _buildDepartmentFilter(List<String> departamentos) {
-    final Map<String, String> deptoMap = {for (var depto in departamentos) depto: depto};
     return InkWell(
-      onTap: () => _showMultiSelectDialog(
+      onTap: () => _showManualAndMultiSelectDialog(
         title: 'Filtrar por Departamento',
-        options: deptoMap,
-        selectedOptions: _selectedDepartments,
+        items: departamentos,
+        selectedItems: _selectedDepartments,
         onConfirm: (values) {
           setState(() {
             _selectedDepartments = values;
@@ -278,11 +331,10 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Widget _buildContributionYearFilter(List<String> anos) {
-    final Map<String, String> anosMap = {for (var ano in anos) ano: ano};
     return InkWell(
       onTap: () => _showMultiSelectDialog(
         title: 'Filtrar por Ano de Contribuição',
-        options: anosMap,
+        options: anos,
         selectedOptions: _selectedContributionYears,
         onConfirm: (values) {
           setState(() {
@@ -308,9 +360,121 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     );
   }
 
+  // lib/screens/secretaria/gestao_membros_page.dart
+
+// ... (imports existentes)
+
+// ... (resto da classe _GestaoMembrosPageState)
+
+  void _showManualAndMultiSelectDialog({
+    required String title,
+    required List<String> items,
+    required List<String> selectedItems,
+    required Function(List<String>) onConfirm,
+  }) {
+    final TextEditingController newDepartmentController = TextEditingController();
+    List<String> allItems = items.toSet().toList()..sort();
+    final List<String> tempSelected = List.from(selectedItems);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final List<String> combinedItems = [...allItems, ...tempSelected].toSet().toList()..sort();
+            final List<String> visibleItems = combinedItems.where((item) => item.toLowerCase().contains(newDepartmentController.text.toLowerCase())).toList();
+
+            return AlertDialog(
+              title: Text(title),
+              content: SingleChildScrollView( // Usar SingleChildScrollView no conteúdo do dialog
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: newDepartmentController,
+                      decoration: InputDecoration(
+                        labelText: 'Digitar novo departamento',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: () {
+                            final newDepartment = newDepartmentController.text.trim();
+                            if (newDepartment.isNotEmpty) {
+                              setDialogState(() {
+                                if (!tempSelected.contains(newDepartment)) {
+                                  tempSelected.add(newDepartment);
+                                }
+                                newDepartmentController.clear();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      onSubmitted: (value) {
+                        final newDepartment = value.trim();
+                        if (newDepartment.isNotEmpty && !tempSelected.contains(newDepartment)) {
+                          setDialogState(() {
+                            tempSelected.add(newDepartment);
+                            newDepartmentController.clear();
+                          });
+                        }
+                      },
+                      onChanged: (_) => setDialogState((){}),
+                    ),
+                    const SizedBox(height: 16),
+                    // AQUI: Usar SizedBox para dar uma altura fixa ao ListView
+                    SizedBox(
+                      height: 250,
+                      width: 300, // Largura máxima do conteúdo para evitar overflow
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: visibleItems.map((item) {
+                          final isSelected = tempSelected.contains(item);
+                          return CheckboxListTile(
+                            title: Text(item),
+                            value: isSelected,
+                            onChanged: (bool? value) {
+                              setDialogState(() {
+                                if (value == true) {
+                                  tempSelected.add(item);
+                                } else {
+                                  tempSelected.remove(item);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    onConfirm(tempSelected);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Confirmar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) {
+      newDepartmentController.dispose();
+    });
+  }
+
+  // Diálogo genérico para outros filtros
   void _showMultiSelectDialog({
     required String title,
-    required Map<String, String> options,
+    required List<String> options,
     required List<String> selectedOptions,
     required Function(List<String>) onConfirm,
   }) {
@@ -325,17 +489,17 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: options.entries.map((entry) {
-                    final isSelected = tempSelected.contains(entry.key);
+                  children: options.map((option) {
+                    final isSelected = tempSelected.contains(option);
                     return CheckboxListTile(
-                      title: Text(entry.value),
+                      title: Text(option),
                       value: isSelected,
                       onChanged: (bool? value) {
                         setDialogState(() {
                           if (value == true) {
-                            tempSelected.add(entry.key);
+                            tempSelected.add(option);
                           } else {
-                            tempSelected.remove(entry.key);
+                            tempSelected.remove(option);
                           }
                         });
                       },
@@ -606,6 +770,64 @@ class MemberListItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Este é o MultiSelectDialog genérico que será usado para os filtros de Situação e Anos de Contribuição
+class MultiSelectDialog extends StatefulWidget {
+  final List<String> items;
+  final List<String> initialSelectedItems;
+  final String title;
+
+  const MultiSelectDialog({
+    super.key,
+    required this.items,
+    required this.initialSelectedItems,
+    required this.title,
+  });
+
+  @override
+  State<MultiSelectDialog> createState() => _MultiSelectDialogState();
+}
+
+class _MultiSelectDialogState extends State<MultiSelectDialog> {
+  late List<String> _selectedItems;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedItems = List<String>.from(widget.initialSelectedItems);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: ListBody(
+          children: widget.items.map((item) {
+            return CheckboxListTile(
+              value: _selectedItems.contains(item),
+              title: Text(item),
+              controlAffinity: ListTileControlAffinity.leading,
+              onChanged: (isChecked) {
+                setState(() {
+                  if (isChecked ?? false) {
+                    _selectedItems.add(item);
+                  } else {
+                    _selectedItems.remove(item);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(child: const Text('Cancelar'), onPressed: () => Navigator.of(context).pop()),
+        ElevatedButton(child: const Text('Confirmar'), onPressed: () => Navigator.of(context).pop(_selectedItems)),
+      ],
     );
   }
 }

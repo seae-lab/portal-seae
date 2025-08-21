@@ -9,7 +9,7 @@ import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
-
+import 'package:projetos/widgets/loading_overlay.dart';
 import '../../../models/membro.dart';
 
 class ControleContribuicoesPage extends StatefulWidget {
@@ -25,6 +25,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   List<Membro> _filteredMembers = [];
   bool _isLoading = true;
   String? _error;
+  bool _isGeneratingPdf = false;
 
   // Estados dos filtros
   String? _selectedYear;
@@ -34,8 +35,10 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   List<String> _availableYears = [];
   Map<String, String> _situacoesMap = {};
 
+  // Colunas
   final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-  final List<String> meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  final List<String> meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  late final Set<String> _activeMonths = Set<String>.from(mesesKeys);
 
   @override
   void initState() {
@@ -70,6 +73,12 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   Future<void> _loadSituacoes() async {
     try {
       _situacoesMap = await _cadastroService.getSituacoes();
+      final idSocioEfetivo = _situacoesMap.keys.firstWhere((k) => _situacoesMap[k] == 'Sócio Efetivo', orElse: () => '4');
+      if(mounted) {
+        setState(() {
+          _selectedStatusIds = [idSocioEfetivo]; // Define o padrão
+        });
+      }
     } catch (e) {
       if(mounted) {
         setState(() {
@@ -99,7 +108,6 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
 
   Future<void> _loadYears() async {
     try {
-      // Corrigido: Usando o método existente 'getAnosContribuicao'
       final years = await _cadastroService.getAnosContribuicao();
       if (mounted) {
         setState(() {
@@ -120,7 +128,8 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     setState(() {
       _filteredMembers = _allMembers.where((membro) {
         final matchesStatus = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
-        return matchesStatus;
+        final hasSelectedYearData = _selectedYear == null || (membro.contribuicao[_selectedYear] as Map<String, dynamic>?) != null;
+        return matchesStatus && hasSelectedYearData;
       }).toList();
 
       _filteredMembers.sort((a, b) => a.nome.compareTo(b.nome));
@@ -128,6 +137,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   }
 
   Future<void> _gerarPdf() async {
+    setState(() => _isGeneratingPdf = true);
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
@@ -160,104 +170,135 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     } else {
       await Printing.layoutPdf(onLayout: (format) async => bytes);
     }
+    setState(() => _isGeneratingPdf = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Controle de Contribuições'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: _filteredMembers.isNotEmpty && _selectedYear != null ? _gerarPdf : null,
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildFilterRow(),
-            if (_isLoading)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
-            else if (_error != null)
-              Expanded(child: Center(child: Text(_error!)))
-            else
-              _buildDataTable(),
+    return LoadingOverlay( // Adicionado o LoadingOverlay
+      isLoading: _isLoading || _isGeneratingPdf,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Controle de Contribuições'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: (_filteredMembers.isNotEmpty && _selectedYear != null && !_isGeneratingPdf) ? _gerarPdf : null,
+            ),
           ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              _buildFilterAndColumnSelection(),
+              const SizedBox(height: 16),
+              if (_error != null)
+                Expanded(child: Center(child: Text(_error!)))
+              else
+                _buildDataTable(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildFilterRow() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Wrap(
-        spacing: 16.0,
-        runSpacing: 8.0,
-        alignment: WrapAlignment.center,
-        children: [
-          SizedBox(
-            width: 150,
-            child: DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'Ano',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              value: _selectedYear,
-              items: _availableYears.map((String year) {
-                return DropdownMenuItem<String>(
-                  value: year,
-                  child: Text(year),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _selectedYear = newValue;
-                  });
-                }
-              },
-            ),
-          ),
-          SizedBox(
-            width: 200,
-            child: DropdownButtonFormField<List<String>>(
-              decoration: const InputDecoration(
-                labelText: 'Situação',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              value: _selectedStatusIds,
-              isExpanded: true,
-              hint: const Text('Filtrar por Situação'),
-              items: [
-                DropdownMenuItem<List<String>>(
-                  value: [],
-                  child: const Text('Todas'),
+  Widget _buildFilterAndColumnSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 16.0,
+          runSpacing: 8.0,
+          alignment: WrapAlignment.center,
+          children: [
+            SizedBox(
+              width: 150,
+              child: DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Ano',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                ..._situacoesMap.entries.map((entry) {
-                  return DropdownMenuItem<List<String>>(
-                    value: [entry.key],
-                    child: Text(entry.value),
+                value: _selectedYear,
+                items: _availableYears.map((String year) {
+                  return DropdownMenuItem<String>(
+                    value: year,
+                    child: Text(year),
                   );
                 }).toList(),
-              ],
-              onChanged: (List<String>? newValues) {
-                if (newValues != null) {
-                  setState(() {
-                    _selectedStatusIds = newValues;
-                    _applyFilters();
-                  });
-                }
-              },
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedYear = newValue;
+                      _applyFilters();
+                    });
+                  }
+                },
+              ),
             ),
-          ),
-        ],
-      ),
+            SizedBox(
+              width: 200,
+              child: InkWell(
+                onTap: () => _showMultiSelectDialog(
+                  title: 'Filtrar por Situação',
+                  options: _situacoesMap.entries.map((e) => e.value).toList(),
+                  selectedOptions: _selectedStatusIds.map((id) => _situacoesMap[id] ?? id).toList(),
+                  onConfirm: (values) {
+                    setState(() {
+                      final Map<String, String> reversedSituacoes = _situacoesMap.map((key, value) => MapEntry(value, key));
+                      _selectedStatusIds = values.map((name) => reversedSituacoes[name] ?? '').where((id) => id.isNotEmpty).toList();
+                      _applyFilters();
+                    });
+                  },
+                ),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Situação',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  child: Text(_selectedStatusIds.isEmpty
+                      ? 'Todas as Situações'
+                      : '${_selectedStatusIds.length} Selecionada(s)'),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text('Selecionar Meses', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8.0,
+          runSpacing: 4.0,
+          children: meses.asMap().entries.map((entry) {
+            final monthIndex = entry.key;
+            final monthLabel = entry.value;
+            final monthKey = mesesKeys[monthIndex];
+            final isSelected = _activeMonths.contains(monthKey);
+
+            return FilterChip(
+              label: Text(monthLabel),
+              selected: isSelected,
+              onSelected: (bool selected) {
+                setState(() {
+                  if (selected) {
+                    _activeMonths.add(monthKey);
+                  } else {
+                    _activeMonths.remove(monthKey);
+                  }
+                });
+              },
+              checkmarkColor: Colors.white,
+              selectedColor: Theme.of(context).primaryColor,
+              backgroundColor: Colors.grey.shade200,
+              labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -269,33 +310,94 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
         ),
       );
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
+    return Expanded(
       child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: DataTable(
-            headingRowColor: MaterialStateColor.resolveWith((states) => Colors.grey.shade200),
-            columns: [
-              const DataColumn(label: Text('Nome', style: TextStyle(fontWeight: FontWeight.bold))),
-              const DataColumn(label: Text('Dados\nAtualizados', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
-              ...meses.map((mes) => DataColumn(label: Text(mes, style: const TextStyle(fontWeight: FontWeight.bold)))),
-            ],
-            rows: _filteredMembers.map((membro) {
-              final year = _selectedYear ?? DateTime.now().year.toString();
-              final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
-              final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+        scrollDirection: Axis.vertical,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: DataTable(
+              headingRowColor: MaterialStateColor.resolveWith((states) => Colors.grey.shade200),
+              columns: [
+                const DataColumn(label: Text('Nome', style: TextStyle(fontWeight: FontWeight.bold))),
+                const DataColumn(label: Text('Dados\nAtualizados', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
+                ..._activeMonths.map((monthKey) {
+                  final monthLabel = meses[mesesKeys.indexOf(monthKey)];
+                  return DataColumn(label: Text(monthLabel, style: const TextStyle(fontWeight: FontWeight.bold)));
+                }).toList(),
+              ],
+              rows: _filteredMembers.map((membro) {
+                final year = _selectedYear ?? DateTime.now().year.toString();
+                final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
+                final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
 
-              return DataRow(cells: [
-                DataCell(Text(membro.nome)),
-                DataCell(Center(child: Checkbox(value: membro.atualizacao, onChanged: null))),
-                ...mesesKeys.map((mesKey) => DataCell(Center(child: Checkbox(value: mesesData[mesKey] ?? false, onChanged: null)))),
-              ]);
-            }).toList(),
+                return DataRow(cells: [
+                  DataCell(Text(membro.nome)),
+                  DataCell(Center(child: Checkbox(value: membro.atualizacao, onChanged: null))),
+                  ..._activeMonths.map((monthKey) => DataCell(Center(child: Checkbox(value: mesesData[monthKey] ?? false, onChanged: null)))),
+                ]);
+              }).toList(),
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  // Método para o diálogo multi-seleção
+  void _showMultiSelectDialog({
+    required String title,
+    required List<String> options,
+    required List<String> selectedOptions,
+    required Function(List<String>) onConfirm,
+  }) {
+    final List<String> tempSelected = List.from(selectedOptions);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(title),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: options.map((option) {
+                    final isSelected = tempSelected.contains(option);
+                    return CheckboxListTile(
+                      title: Text(option),
+                      value: isSelected,
+                      onChanged: (bool? value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            tempSelected.add(option);
+                          } else {
+                            tempSelected.remove(option);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    onConfirm(tempSelected);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Confirmar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -312,9 +414,9 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Controle de Contribuições Mensais', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, font: font)),
+                    pw.Text('Controle de Contribuições Mensais', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, font: font)),
                     pw.SizedBox(height: 5),
-                    pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),
+                    pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 8)),
                   ],
                 ),
                 pw.SizedBox(width: 50),
@@ -328,14 +430,14 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
 
   pw.Widget _buildContentTable(pw.Context context) {
     final year = _selectedYear ?? DateTime.now().year.toString();
-    final tableHeaders = ['Nome', 'Dados Atualizados', ...meses];
+    final tableHeaders = ['Nome', 'Dados Atualizados', ..._activeMonths.map((monthKey) => meses[mesesKeys.indexOf(monthKey)]).toList()];
     final tableData = _filteredMembers.map((membro) {
       final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
       final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
       return [
         membro.nome,
         membro.atualizacao ? 'Sim' : 'Não',
-        ...mesesKeys.map((mesKey) => (mesesData[mesKey] ?? false) ? 'Sim' : 'Não').toList(),
+        ..._activeMonths.map((monthKey) => (mesesData[monthKey] ?? false) ? 'Sim' : 'Não').toList(),
       ];
     }).toList();
 

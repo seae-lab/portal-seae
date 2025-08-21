@@ -148,13 +148,23 @@ class CadastroService {
     return false;
   }
 
+  String _formatNameForUrl(String name) {
+    // Remove caracteres especiais e substitui espaços por underscores
+    final formattedName = name
+        .replaceAll(RegExp(r'[^\w\s]'), '') // Remove caracteres especiais, exceto letras, números e espaços
+        .replaceAll(' ', '_') // Substitui espaços por underscores
+        .toLowerCase(); // Opcional: converte para minúsculas
+    return formattedName;
+  }
+
   Future<String> uploadProfileImage({
-    required String cpf,
+    required String memberId,
+    required String memberName,
     required Uint8List fileBytes,
   }) async {
     try {
-      final cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
-      final ref = _storage.ref('documentos/$cleanCpf/profile.jpg');
+      final formattedName = _formatNameForUrl(memberName);
+      final ref = _storage.ref('profile_images/$memberId\_$formattedName.jpg');
       final metadata = SettableMetadata(contentType: 'image/jpeg');
       final uploadTask = ref.putData(fileBytes, metadata);
       final snapshot = await uploadTask.whenComplete(() => {});

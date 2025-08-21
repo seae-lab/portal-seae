@@ -6,6 +6,7 @@ import 'package:projetos/services/cadastro_service.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:pdf/pdf.dart';
 import 'package:intl/intl.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
 import '../../../models/membro.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -22,8 +23,11 @@ class ConsultaAvancadaPage extends StatefulWidget {
 
 class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
   final CadastroService _cadastroService = Modular.get<CadastroService>();
+  List<Membro> _allMembers = [];
   List<Membro> _resultados = [];
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _isSearching = false;
+  bool _isGeneratingPdf = false;
 
   final List<Filter> _filters = [Filter(field: 'nome', value: '')];
   final Set<String> _activeColumns = {'nome', 'dados_pessoais.cpf'};
@@ -37,7 +41,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
     'data_proposta': 'Data de Proposta',
     'ultima_atualizacao': 'Última Atualização',
     'contribuicao': 'Contribuição',
-    'atividades': 'Atividade (Departamento)', // Corrigido
+    'atividades': 'Atividade (Departamento)',
     'dados_pessoais.data_nascimento': 'Data de Nascimento',
     'situacao_seae': 'Situação',
   };
@@ -57,15 +61,33 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
   @override
   void initState() {
     super.initState();
-    _loadDependencies();
+    _loadData();
   }
 
-  Future<void> _loadDependencies() async {
-    final situacoes = await _cadastroService.getSituacoes();
-    if (mounted) {
-      setState(() {
-        _situacoesMap = situacoes;
-      });
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final situacoes = await _cadastroService.getSituacoes();
+      final members = await _cadastroService.getMembros().first;
+      if (mounted) {
+        setState(() {
+          _situacoesMap = situacoes;
+          _allMembers = members;
+          _resultados = List.from(_allMembers);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar dados: $e')),
+        );
+      }
     }
   }
 
@@ -83,7 +105,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
         return membro.dataAtualizacao;
       case 'contribuicao':
         return membro.contribuicao.keys.join(', ');
-      case 'atividades': // Corrigido
+      case 'atividades':
         return membro.atividades.join(', ');
       case 'dados_pessoais.data_nascimento':
         return membro.dadosPessoais.dataNascimento;
@@ -96,29 +118,32 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Consulta Avançada'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: _resultados.isNotEmpty ? _gerarPdf : null,
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildFilterSection(),
-            const SizedBox(height: 16),
-            _buildColumnSelection(),
-            const SizedBox(height: 16),
-            _buildButtons(),
-            const SizedBox(height: 16),
-            _buildResultsSection(),
+    return LoadingOverlay(
+      isLoading: _isGeneratingPdf,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Consulta Avançada'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _resultados.isNotEmpty && !_isGeneratingPdf ? _gerarPdf : null,
+            ),
           ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildFilterSection(),
+              const SizedBox(height: 16),
+              _buildColumnSelection(),
+              const SizedBox(height: 16),
+              _buildButtons(),
+              const SizedBox(height: 16),
+              _buildResultsSection(),
+            ],
+          ),
         ),
       ),
     );
@@ -179,7 +204,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
-                        controller: TextEditingController(text: filter.value),
+                        initialValue: filter.value,
                         decoration: InputDecoration(labelText: 'Valor'),
                         onChanged: (String newValue) {
                           filter.value = newValue;
@@ -248,8 +273,8 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         ElevatedButton(
-          onPressed: _isLoading ? null : _performSearch,
-          child: _isLoading
+          onPressed: _isSearching ? null : _performSearch,
+          child: _isSearching
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Buscar'),
         ),
@@ -258,11 +283,13 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
   }
 
   Widget _buildResultsSection() {
+    if (_isLoading) {
+      return const Expanded(child: Center(child: CircularProgressIndicator()));
+    }
+
     return Expanded(
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _resultados.isEmpty
-          ? const Center(child: Text('Nenhum resultado encontrado. Realize uma busca.'))
+      child: _resultados.isEmpty
+          ? const Center(child: Text('Nenhum resultado encontrado.'))
           : SizedBox(
         width: double.infinity,
         child: SingleChildScrollView(
@@ -296,15 +323,15 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
     });
   }
 
-  Future<void> _performSearch() async {
+  void _performSearch() {
     setState(() {
-      _isLoading = true;
+      _isSearching = true;
     });
 
     try {
-      final allMembers = await _cadastroService.getMembros().first;
-      final results = allMembers.where((membro) {
+      final results = _allMembers.where((membro) {
         return _filters.every((filter) {
+          if (filter.value.isEmpty) return true;
           final value = _getFieldValue(membro, filter.field);
           return _checkCondition(value, filter.operator, filter.value);
         });
@@ -319,7 +346,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
       );
     } finally {
       setState(() {
-        _isLoading = false;
+        _isSearching = false;
       });
     }
   }
@@ -394,6 +421,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
   }
 
   Future<void> _gerarPdf() async {
+    setState(() => _isGeneratingPdf = true);
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
@@ -426,6 +454,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
     } else {
       await Printing.layoutPdf(onLayout: (format) async => bytes);
     }
+    setState(() => _isGeneratingPdf = false);
   }
 
   pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {

@@ -44,10 +44,18 @@ class _DashboardPageState extends State<DashboardPage> {
       _cadastroService.getDepartamentos(),
     ]);
 
+    final rawDepartamentos = results[2] as List<String>;
+
+    // Processa a lista de departamentos para extrair apenas a parte principal (antes da /)
+    final processedDepartamentos = rawDepartamentos
+        .map((d) => d.split('/').first)
+        .toSet()
+        .toList();
+
     return DashboardData(
       membros: results[0] as List<Membro>,
       situacoes: results[1] as Map<String, String>,
-      departamentos: (results[2] as List<String>).toSet().toList(),
+      departamentos: processedDepartamentos,
     );
   }
 
@@ -163,7 +171,6 @@ class _DashboardPageState extends State<DashboardPage> {
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (group) => Colors.blueGrey,
-              // Corrigido: Adicionado o parâmetro 'rodIndex'
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 String weekDay = situacaoCount.keys.elementAt(group.x.toInt());
                 return BarTooltipItem(
@@ -250,16 +257,26 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildDepartamentoChart(List<Membro> membros, List<String> departamentos) {
+    // A lista 'departamentos' já contém apenas os nomes principais (antes da /)
     final Map<String, int> deptoCount = {for (var d in departamentos) d: 0};
-    int totalAtividades = 0;
+
     for (var membro in membros) {
-      for (var atividade in membro.atividades) {
-        if (deptoCount.containsKey(atividade)) {
-          deptoCount[atividade] = deptoCount[atividade]! + 1;
-          totalAtividades++;
+      // Usamos um Set para garantir que cada membro seja contado apenas uma vez por departamento principal,
+      // mesmo que ele esteja em múltiplas sub-atividades (ex: DAPS/GPR e DAPS/XYZ).
+      final memberMainDepts = membro.atividades.map((a) => a.split('/').first).toSet();
+
+      // Incrementa a contagem para cada departamento principal único do membro
+      for (var mainDept in memberMainDepts) {
+        if (deptoCount.containsKey(mainDept)) {
+          deptoCount[mainDept] = deptoCount[mainDept]! + 1;
         }
       }
     }
+
+    // O total agora representa o número de "vagas" preenchidas,
+    // permitindo que a porcentagem do gráfico some 100%.
+    final totalMemberAssignments = deptoCount.values.fold(0, (sum, count) => sum + count);
+
     deptoCount.removeWhere((key, value) => value == 0);
 
     final List<PieChartSectionData> sections = deptoCount.entries.map((entry) {
@@ -267,7 +284,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final isTouched = index == touchedIndex;
       final fontSize = isTouched ? 18.0 : 14.0;
       final radius = isTouched ? 120.0 : 110.0;
-      final percentage = totalAtividades > 0 ? (entry.value / totalAtividades * 100).toStringAsFixed(1) : "0.0";
+      final percentage = totalMemberAssignments > 0 ? (entry.value / totalMemberAssignments * 100).toStringAsFixed(1) : "0.0";
 
       return PieChartSectionData(
         value: entry.value.toDouble(),
@@ -368,7 +385,6 @@ class _DashboardPageState extends State<DashboardPage> {
             handleBuiltInTouches: true,
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (touchedSpot) => const Color.fromRGBO(96, 125, 139, 0.8),
-              // Corrigido: Usando getTooltipItems em vez de getTooltipItem
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((touchedSpot) {
                   return LineTooltipItem(

@@ -7,8 +7,8 @@ import '../services/auth_service.dart';
 class RoleGuard extends RouteGuard {
   final List<String> allowedRoles;
 
-  // ATUALIZADO: Redireciona para /login em caso de falha
-  RoleGuard({required this.allowedRoles}) : super(redirectTo: '/login');
+  // ATUALIZADO: Redireciona para '/' em caso de falha
+  RoleGuard({required this.allowedRoles}) : super(redirectTo: '/');
 
   @override
   Future<bool> canActivate(String path, ModularRoute route) async {

@@ -1,4 +1,5 @@
 // lib/app_module.dart
+
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/auth/login_screen.dart';
 import 'package:projetos/screens/dij/dij_page.dart';
@@ -15,6 +16,7 @@ import 'package:projetos/screens/secretaria/relatorios/socios_votantes_page.dart
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
+import 'guards/login_guard.dart';
 import 'guards/role_guard.dart';
 
 class AppModule extends Module {
@@ -26,8 +28,8 @@ class AppModule extends Module {
 
   @override
   void routes(r) {
-    // AuthGuard removido da rota de login para que ela possa ser acessada
-    r.child('/', child: (context) => const LoginScreen());
+    // A rota de login agora tem um LoginGuard para redirecionar usuários autenticados
+    r.child('/', child: (context) => const LoginScreen(), guards: [LoginGuard()]);
 
     r.child('/home',
         child: (context) => const HomeScreen(),

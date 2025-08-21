@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:flutter/services.dart';
@@ -26,6 +27,8 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
   List<Membro> _membrosPromoviveis = [];
   bool _isLoading = true;
   String? _error;
+  bool _isGeneratingPdf = false;
+
 
   static const int idSituacaoColaborador = 3;
   static const int mesesContribuicaoIninterrupta = 12;
@@ -149,6 +152,7 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
   }
 
   Future<void> _gerarPdf() async {
+    setState(() => _isGeneratingPdf = true);
     final pdf = pw.Document();
     final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
@@ -181,25 +185,33 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
     } else {
       await Printing.layoutPdf(onLayout: (format) async => bytes);
     }
+    setState(() => _isGeneratingPdf = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sócios Colaboradores Promovíveis'),
-        actions: [
-          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: _membrosPromoviveis.isNotEmpty ? _gerarPdf : null),
-        ],
+    return LoadingOverlay(
+      isLoading: _isLoading || _isGeneratingPdf,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Sócios Colaboradores Promovíveis'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _membrosPromoviveis.isNotEmpty && !_isGeneratingPdf
+                  ? _gerarPdf
+                  : null,
+            ),
+          ],
+        ),
+        body: _buildBody(),
       ),
-      body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
-    if (_membrosPromoviveis.isEmpty) return const Center(child: Text('Nenhum sócio promovível encontrado.'));
+    if (_membrosPromoviveis.isEmpty && !_isLoading) return const Center(child: Text('Nenhum sócio promovível encontrado.'));
 
     return Column(
       children: [
