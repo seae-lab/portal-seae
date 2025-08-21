@@ -204,7 +204,10 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
                         final matchesStatus = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
 
-                        final matchesDepartment = _selectedDepartments.isEmpty || membro.atividades.any((depto) => _selectedDepartments.contains(depto));
+                        // LÓGICA DE FILTRO DE DEPARTAMENTO ATUALIZADA
+                        final matchesDepartment = _selectedDepartments.isEmpty ||
+                            _selectedDepartments.any((selectedDepto) =>
+                                membro.atividades.any((depto) => depto.startsWith(selectedDepto)));
 
                         final matchesContributionYear = _selectedContributionYears.isEmpty ||
                             _selectedContributionYears.any((year) {
@@ -218,6 +221,9 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
                         return matchesSearchTerm && matchesStatus && matchesDepartment && matchesContributionYear;
                       }).toList();
+
+                      // ** ADICIONADO: Ordenação alfabética da lista filtrada **
+                      filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
 
                       if (filteredMembers.isEmpty) {
                         return const Center(child: Text('Nenhum membro encontrado com os filtros selecionados.'));
@@ -310,10 +316,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Widget _buildDepartmentFilter(List<String> departamentos) {
+    // Processa a lista de departamentos para extrair apenas a parte principal (antes da /)
+    final mainDepartments = departamentos.map((d) => d.split('/').first).toSet().toList();
+
     return InkWell(
       onTap: () => _showManualAndMultiSelectDialog(
         title: 'Filtrar por Departamento',
-        items: departamentos,
+        items: mainDepartments,
         selectedItems: _selectedDepartments,
         onConfirm: (values) {
           setState(() {

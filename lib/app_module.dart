@@ -1,5 +1,4 @@
 // lib/app_module.dart
-
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/auth/login_screen.dart';
 import 'package:projetos/screens/dij/dij_page.dart';
@@ -13,10 +12,10 @@ import 'package:projetos/screens/secretaria/relatorios_membros_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/consulta_avancada_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/socios_elegiveis_page.dart';
 import 'package:projetos/screens/secretaria/relatorios/socios_votantes_page.dart';
+import 'package:projetos/screens/splash_screen.dart'; // Importe a nova tela
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
-import 'guards/login_guard.dart';
 import 'guards/role_guard.dart';
 
 class AppModule extends Module {
@@ -28,8 +27,11 @@ class AppModule extends Module {
 
   @override
   void routes(r) {
-    // A rota de login agora tem um LoginGuard para redirecionar usuários autenticados
-    r.child('/', child: (context) => const LoginScreen(), guards: [LoginGuard()]);
+    // Rota inicial agora é a SplashScreen
+    r.child('/', child: (context) => const SplashScreen());
+
+    // Rota de login
+    r.child('/login', child: (context) => const LoginScreen());
 
     r.child('/home',
         child: (context) => const HomeScreen(),

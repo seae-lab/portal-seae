@@ -83,7 +83,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   final _ufController = TextEditingController();
   final _cpfController = TextEditingController(); // Controlador para o CPF
 
-  // NOVO: Controlador para o campo de texto de novo departamento
   final _newDepartmentController = TextEditingController();
 
   final _cepMask = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
@@ -147,7 +146,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     _cidadeController.dispose();
     _ufController.dispose();
     _cpfController.dispose();
-    _newDepartmentController.dispose(); // NOVO: Dispose do controlador
+    _newDepartmentController.dispose();
     super.dispose();
   }
 
@@ -210,17 +209,58 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   }
 
   Future<void> _pickImage() async {
+    if (_isNewMember) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, salve o membro antes de adicionar uma foto.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 800);
+
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();
       if (mounted) {
-        setState(() => _newImageBytes = bytes);
+        setState(() {
+          _newImageBytes = bytes;
+          _isSaving = true;
+        });
+      }
+
+      try {
+        final downloadUrl = await _cadastroService.uploadProfileImage(
+          cpf: _formData.dadosPessoais.cpf,
+          fileBytes: bytes,
+        );
+
+        _formData.foto = downloadUrl;
+        await _cadastroService.saveMembro(_formData);
+
+        if (mounted) {
+          setState(() {
+            _newImageBytes = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Foto atualizada com sucesso!'),
+            backgroundColor: Colors.green,
+          ));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao enviar a foto: $e'), backgroundColor: Colors.red));
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
       }
     }
   }
 
-  // NOVO: Função para adicionar um departamento manualmente
   void _addNewDepartment() {
     final newDepartment = _newDepartmentController.text.trim();
     if (newDepartment.isNotEmpty && !_formData.atividades.contains(newDepartment)) {
@@ -234,42 +274,38 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   Future<void> _saveForm() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      if (mounted) {
-        setState(() => _isSaving = true);
-      }
+      setState(() => _isSaving = true);
+
       try {
-        // Atualiza o CPF no objeto _formData antes de salvar
         _formData.dadosPessoais.cpf = _cpfController.text;
 
-        // Verifica se é um novo membro e salva para obter o ID
         if (_isNewMember) {
-          final DocumentReference docRef = await _cadastroService.membrosCollection.add(_formData.toFirestore());
+          final docRef = await _cadastroService.membrosCollection.add(_formData.toFirestore());
           _formData.id = docRef.id;
         }
 
-        // Realiza o upload da imagem de perfil APENAS se houver uma nova imagem e o ID do membro
         if (_newImageBytes != null) {
-          if (_formData.id != null && _formData.id!.isNotEmpty) {
-            _formData.foto = await _cadastroService.uploadProfileImage(
-              memberId: _formData.id!,
-              memberName: _formData.nome,
+          if (_formData.dadosPessoais.cpf.isNotEmpty) {
+            final downloadUrl = await _cadastroService.uploadProfileImage(
+              cpf: _formData.dadosPessoais.cpf,
               fileBytes: _newImageBytes!,
             );
+            _formData.foto = downloadUrl;
           } else {
-            // Caso o ID não esteja disponível (o que não deve acontecer após o 'add')
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('ID do membro é necessário para salvar a foto de perfil.'),
-                backgroundColor: Colors.orange,
-              ));
-            }
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('É necessário preencher o CPF para salvar a foto.'),
+              backgroundColor: Colors.orange,
+            ));
           }
         }
 
-        // Salva o membro com o URL da nova foto (se houver)
         await _cadastroService.saveMembro(_formData);
 
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Membro salvo com sucesso!'),
+            backgroundColor: Colors.green,
+          ));
           Navigator.of(context).pop();
         }
       } catch (e) {
@@ -283,6 +319,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       }
     }
   }
+
 
   void _toggleAllMonths(String year, bool? value) {
     if (value == null) return;

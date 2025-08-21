@@ -12,7 +12,6 @@ import '../models/membro.dart';
 class CadastroService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // CORREÇÃO: Getter da coleção de membros agora é público.
   CollectionReference get membrosCollection =>
       _firestore.collection('bases/base_cadastral/membros');
 
@@ -94,77 +93,16 @@ class CadastroService {
     return mediunidades.map((tipo) => tipo.toString()).toList();
   }
 
-  bool isCpfValid(String cpf) {
-    cpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cpf.length != 11) return false;
-    if (RegExp(r'^(\d)\1{10}$').hasMatch(cpf)) return false;
-
-    List<int> digits = cpf.split('').map((d) => int.parse(d)).toList();
-
-    int sum1 = 0;
-    for (int i = 0; i < 9; i++) {
-      sum1 += digits[i] * (10 - i);
-    }
-    int verifier1 = (sum1 * 10) % 11;
-    if (verifier1 == 10) verifier1 = 0;
-    if (verifier1 != digits[9]) return false;
-
-    int sum2 = 0;
-    for (int i = 0; i < 10; i++) {
-      sum2 += digits[i] * (11 - i);
-    }
-    int verifier2 = (sum2 * 10) % 11;
-    if (verifier2 == 10) verifier2 = 0;
-    if (verifier2 != digits[10]) return false;
-
-    return true;
-  }
-
-  Future<bool> isCpfUnique(String cpf, {String? currentMemberId}) async {
-    if (cpf.isEmpty) return true;
-    final query = membrosCollection.where('dados_pessoais.cpf', isEqualTo: cpf);
-    final snapshot = await query.get();
-
-    if (snapshot.docs.isEmpty) {
-      return true;
-    }
-    if (currentMemberId != null && snapshot.docs.length == 1 && snapshot.docs.first.id == currentMemberId) {
-      return true;
-    }
-    return false;
-  }
-
-  Future<bool> isEmailUnique(String email, {String? currentMemberId}) async {
-    if (email.isEmpty) return true;
-    final query = membrosCollection.where('dados_pessoais.e-mail', isEqualTo: email);
-    final snapshot = await query.get();
-
-    if (snapshot.docs.isEmpty) {
-      return true;
-    }
-    if (currentMemberId != null && snapshot.docs.length == 1 && snapshot.docs.first.id == currentMemberId) {
-      return true;
-    }
-    return false;
-  }
-
-  String _formatNameForUrl(String name) {
-    // Remove caracteres especiais e substitui espaços por underscores
-    final formattedName = name
-        .replaceAll(RegExp(r'[^\w\s]'), '') // Remove caracteres especiais, exceto letras, números e espaços
-        .replaceAll(' ', '_') // Substitui espaços por underscores
-        .toLowerCase(); // Opcional: converte para minúsculas
-    return formattedName;
-  }
-
   Future<String> uploadProfileImage({
-    required String memberId,
-    required String memberName,
+    required String cpf,
     required Uint8List fileBytes,
   }) async {
     try {
-      final formattedName = _formatNameForUrl(memberName);
-      final ref = _storage.ref('profile_images/$memberId\_$formattedName.jpg');
+      final cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanCpf.isEmpty) {
+        throw Exception("CPF inválido para upload de imagem.");
+      }
+      final ref = _storage.ref('profile_images/$cleanCpf.jpg');
       final metadata = SettableMetadata(contentType: 'image/jpeg');
       final uploadTask = ref.putData(fileBytes, metadata);
       final snapshot = await uploadTask.whenComplete(() => {});

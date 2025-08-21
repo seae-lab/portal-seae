@@ -23,7 +23,6 @@ class AuthService with ChangeNotifier {
   final Completer<void> _initialAuthCheckCompleter = Completer<void>();
   Future<void> get initialAuthCheck => _initialAuthCheckCompleter.future;
 
-  // Corrigido: Adicionado o getter 'isAuthenticated'
   bool get isAuthenticated => _auth.currentUser != null;
 
   AuthService() {
@@ -124,8 +123,7 @@ class AuthService with ChangeNotifier {
 
   String getInitialRouteForUser() {
     if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
-      // Corrigido: Rota de login deve ser '/' conforme a configuração do AppModule.
-      return '/';
+      return '/login';
     }
     if (currentUserPermissions!.hasRole('admin') || currentUserPermissions!.hasRole('secretaria')) {
       return '/home/dashboard';
@@ -133,8 +131,7 @@ class AuthService with ChangeNotifier {
     if (currentUserPermissions!.hasRole('dij')) {
       return '/home/dij';
     }
-    // Corrigido: Rota de retorno padrão deve ser a tela de login.
-    return '/';
+    return '/login';
   }
 
   Future<void> signOut() async {
@@ -142,8 +139,7 @@ class AuthService with ChangeNotifier {
     await _googleSignIn.signOut();
     await _auth.signOut();
     notifyListeners();
-    // Corrigido: Rota de login deve ser '/' conforme a configuração do AppModule.
-    Modular.to.pushNamedAndRemoveUntil('/', (_) => false);
+    Modular.to.pushNamedAndRemoveUntil('/login', (_) => false);
   }
 
   @override

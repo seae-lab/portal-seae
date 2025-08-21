@@ -19,16 +19,10 @@ class _DashboardPageState extends State<DashboardPage> {
   late Future<DashboardData> _dashboardDataFuture;
   int touchedIndex = -1; // Para interatividade do gráfico de pizza
 
-  // Paleta de cores moderna para os gráficos
   final List<Color> _colorPalette = [
-    Colors.cyan.shade400,
-    Colors.amber.shade400,
-    Colors.pink.shade400,
-    Colors.green.shade400,
-    Colors.purple.shade400,
-    Colors.orange.shade400,
-    Colors.teal.shade400,
-    Colors.red.shade400,
+    Colors.cyan.shade400, Colors.amber.shade400, Colors.pink.shade400,
+    Colors.green.shade400, Colors.purple.shade400, Colors.orange.shade400,
+    Colors.teal.shade400, Colors.red.shade400,
   ];
 
   @override
@@ -45,12 +39,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ]);
 
     final rawDepartamentos = results[2] as List<String>;
-
-    // Processa a lista de departamentos para extrair apenas a parte principal (antes da /)
-    final processedDepartamentos = rawDepartamentos
-        .map((d) => d.split('/').first)
-        .toSet()
-        .toList();
+    final processedDepartamentos = rawDepartamentos.map((d) => d.split('/').first).toSet().toList();
 
     return DashboardData(
       membros: results[0] as List<Membro>,
@@ -167,27 +156,21 @@ class _DashboardPageState extends State<DashboardPage> {
       chart: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: situacaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) * 1.2,
+          maxY: (situacaoCount.values.fold(0.0, (max, v) => v > max ? v.toDouble() : max) * 1.2).ceilToDouble(),
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (group) => Colors.blueGrey,
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 String weekDay = situacaoCount.keys.elementAt(group.x.toInt());
+                // Mostra o valor como inteiro
+                final value = rod.toY.toInt();
                 return BarTooltipItem(
                   '$weekDay\n',
-                  const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   children: <TextSpan>[
                     TextSpan(
-                      text: (rod.toY - 1).toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      text: value.toString(),
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
                     ),
                   ],
                 );
@@ -200,9 +183,9 @@ class _DashboardPageState extends State<DashboardPage> {
               x: index,
               barRods: [
                 BarChartRodData(
-                  toY: entry.value.toDouble() + 1, // Add 1 to avoid zero height issues
-                  width: 22,
-                  borderRadius: const BorderRadius.all(Radius.circular(6)),
+                  toY: entry.value.toDouble(),
+                  width: 16, // Deixando a barra mais fina
+                  borderRadius: const BorderRadius.all(Radius.circular(4)),
                   gradient: LinearGradient(
                     colors: [Colors.blue.shade400, Colors.blue.shade800],
                     begin: Alignment.bottomCenter,
@@ -210,7 +193,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
               ],
-              showingTooltipIndicators: [0],
             );
           }).toList(),
           titlesData: FlTitlesData(
@@ -257,15 +239,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildDepartamentoChart(List<Membro> membros, List<String> departamentos) {
-    // A lista 'departamentos' já contém apenas os nomes principais (antes da /)
     final Map<String, int> deptoCount = {for (var d in departamentos) d: 0};
 
     for (var membro in membros) {
-      // Usamos um Set para garantir que cada membro seja contado apenas uma vez por departamento principal,
-      // mesmo que ele esteja em múltiplas sub-atividades (ex: DAPS/GPR e DAPS/XYZ).
       final memberMainDepts = membro.atividades.map((a) => a.split('/').first).toSet();
 
-      // Incrementa a contagem para cada departamento principal único do membro
       for (var mainDept in memberMainDepts) {
         if (deptoCount.containsKey(mainDept)) {
           deptoCount[mainDept] = deptoCount[mainDept]! + 1;
@@ -273,8 +251,6 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
-    // O total agora representa o número de "vagas" preenchidas,
-    // permitindo que a porcentagem do gráfico some 100%.
     final totalMemberAssignments = deptoCount.values.fold(0, (sum, count) => sum + count);
 
     deptoCount.removeWhere((key, value) => value == 0);
@@ -360,7 +336,6 @@ class _DashboardPageState extends State<DashboardPage> {
       membro.contribuicao.forEach((year, data) {
         if (data is Map) {
           final meses = data['meses'] as Map<String, dynamic>?;
-          // Verifica se há pelo menos um mês pago para contar o ano
           if (meses != null && meses.values.any((isPaid) => isPaid == true)) {
             contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
           }
