@@ -23,6 +23,10 @@ class _DashboardPageState extends State<DashboardPage> {
   final Map<String, int> _contribuicaoPorBairro = {};
 
   List<Marker> _markers = [];
+  List<Membro> _membros = [];
+
+  String? _selectedYear;
+  List<String> _availableYears = [];
 
   final List<Color> _colorPalette = [
     Colors.cyan.shade400,
@@ -38,10 +42,10 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    _dashboardDataFuture = _loadDashboardData();
+    _dashboardDataFuture = _loadInitialDashboardData();
   }
 
-  Future<DashboardData> _loadDashboardData() async {
+  Future<DashboardData> _loadInitialDashboardData() async {
     final results = await Future.wait([
       _cadastroService.getMembros().first,
       _cadastroService.getSituacoes(),
@@ -50,22 +54,53 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final rawDepartamentos = results[2] as List<String>;
     final processedDepartamentos = rawDepartamentos.map((d) => d.split('/').first).toSet().toList();
-    final membros = results[0] as List<Membro>;
+    _membros = results[0] as List<Membro>;
 
+    final Set<String> years = {};
+    for (var membro in _membros) {
+      years.addAll(membro.contribuicao.keys);
+    }
+    _availableYears = years.toList()..sort();
+
+    if (_selectedYear == null && _availableYears.isNotEmpty) {
+      _selectedYear = _availableYears.last;
+    }
+
+    // Chamada inicial para popular o mapa com o ano mais recente
+    await _updateMarkersForYear(_selectedYear);
+
+    return DashboardData(
+      membros: _membros,
+      situacoes: results[1] as Map<String, String>,
+      departamentos: processedDepartamentos,
+    );
+  }
+
+  Future<void> _updateMarkersForYear(String? year) async {
     _contribuicaoPorBairro.clear();
-    for (var membro in membros) {
-      int annualContributions = 0;
-      membro.contribuicao.forEach((year, data) {
-        if (data is Map<String, dynamic> && data['quitado'] == true) {
-          annualContributions += 1;
-        } else if (data is Map<String, dynamic> &&
-            data['meses'] != null &&
-            (data['meses'] as Map<String, dynamic>)
-                .values
-                .any((isPaid) => isPaid == true)) {
-          annualContributions += 1;
-        }
+
+    if (year == null) {
+      setState(() {
+        _markers = [];
       });
+      return;
+    }
+
+    for (var membro in _membros) {
+      int annualContributions = 0;
+
+      if (membro.contribuicao.containsKey(year)) {
+        final data = membro.contribuicao[year] as Map<String, dynamic>;
+
+        if (data['quitado'] == true) {
+          annualContributions = 1;
+        } else {
+          final meses = data['meses'] as Map<String, dynamic>?;
+          if (meses != null && meses.values.any((isPaid) => isPaid == true)) {
+            annualContributions = 1;
+          }
+        }
+      }
 
       if (annualContributions > 0) {
         final bairro = membro.dadosPessoais.bairro.trim().toLowerCase();
@@ -113,7 +148,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
         );
-            }());
+      }());
     }
 
     await Future.wait(futures);
@@ -121,12 +156,6 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _markers = markersList;
     });
-
-    return DashboardData(
-      membros: membros,
-      situacoes: results[1] as Map<String, String>,
-      departamentos: processedDepartamentos,
-    );
   }
 
   @override
@@ -155,7 +184,7 @@ class _DashboardPageState extends State<DashboardPage> {
           return RefreshIndicator(
             onRefresh: () async {
               setState(() {
-                _dashboardDataFuture = _loadDashboardData();
+                _dashboardDataFuture = _loadInitialDashboardData();
               });
             },
             child: ListView(
@@ -210,17 +239,56 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return _buildChartCard(
       title: 'Distribuição de Contribuições',
-      chart: FlutterMap(
-        options: MapOptions(
-          initialCenter: center,
-          initialZoom: 11.0,
-        ),
+      chart: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.app',
+          FlutterMap(
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 11.0,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.app',
+              ),
+              MarkerLayer(markers: _markers),
+            ],
           ),
-          MarkerLayer(markers: _markers),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: DropdownButton<String>(
+                value: _selectedYear,
+                hint: const Text('Selecione o ano'),
+                underline: const SizedBox(),
+                items: _availableYears.map((String year) {
+                  return DropdownMenuItem<String>(
+                    value: year,
+                    child: Text(year),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedYear = newValue;
+                  });
+                  _updateMarkersForYear(newValue);
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );
