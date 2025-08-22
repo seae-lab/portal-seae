@@ -134,7 +134,7 @@ class RelatoriosMembrosPage extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         leading: CircleAvatar(
           radius: 24,
-          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+          backgroundColor: Theme.of(context).primaryColor.withAlpha(25), // withOpacity(0.1)
           child: Icon(icon, size: 26, color: Theme.of(context).primaryColor),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),

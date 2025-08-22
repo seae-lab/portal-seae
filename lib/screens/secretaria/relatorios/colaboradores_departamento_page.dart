@@ -8,10 +8,10 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
+//NÃO TIRAR, universal_html não funciona aqui
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:flutter/services.dart';
-
 import '../../../models/membro.dart';
 import '../../../services/cadastro_service.dart';
 
@@ -40,7 +40,7 @@ class _ColaboradoresDepartamentoPageState extends State<ColaboradoresDepartament
     'situacao_nome': 'Situação',
     'data_proposta': 'Data de Proposta',
   };
-  Set<String> _activeColumns = {'nome', 'situacao_nome'};
+  final Set<String> _activeColumns = {'nome', 'situacao_nome'};
 
   @override
   void initState() {

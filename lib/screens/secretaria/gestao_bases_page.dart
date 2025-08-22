@@ -5,7 +5,7 @@ import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
 
-// Main Page Widget (agora é StatelessWidget)
+// Main Page Widget
 class GestaoBasesPage extends StatelessWidget {
   const GestaoBasesPage({super.key});
 
@@ -37,7 +37,7 @@ class GestaoBasesPage extends StatelessWidget {
   }
 }
 
-// Permissions Card Widget (StatefulWidget)
+// Permissions Card Widget
 class PermissionsCard extends StatefulWidget {
   const PermissionsCard({super.key});
 
@@ -114,7 +114,9 @@ class _PermissionsCardState extends State<PermissionsCard> {
                                       onConfirm: () async {
                                         setState(() => _isLoading = true);
                                         await _cadastroService.deletePermission(email);
-                                        setState(() => _isLoading = false);
+                                        if (mounted) {
+                                          setState(() => _isLoading = false);
+                                        }
                                       }),
                                 ),
                               ],
@@ -138,7 +140,6 @@ class _PermissionsCardState extends State<PermissionsCard> {
     final exemplosDoc = await _cadastroService.permissionsCollection.doc('exemplos').get();
     final exemplosData = exemplosDoc.data() as Map<String, dynamic>? ?? {};
 
-    // Estrutura para os papéis
     final Map<String, List<String>> nestedRoles = {};
     final List<String> topLevelRoles = [];
 
@@ -156,9 +157,9 @@ class _PermissionsCardState extends State<PermissionsCard> {
     final emailController = TextEditingController(text: email);
     final formKey = GlobalKey<FormState>();
 
-    // Estado dos papéis no diálogo
     Map<String, dynamic> rolesState = isEditing ? Map<String, dynamic>.from(currentRoles!) : {};
 
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) {
@@ -230,7 +231,7 @@ class _PermissionsCardState extends State<PermissionsCard> {
                                 onChanged: (val) => setDialogState(() => subRolesState[subRole] = val!),
                                 dense: true,
                               );
-                            }).toList()
+                            })
                           ],
                         );
                       }),
@@ -243,13 +244,17 @@ class _PermissionsCardState extends State<PermissionsCard> {
                 ElevatedButton(
                   onPressed: () async {
                     if (formKey.currentState?.validate() ?? true) {
-                      Navigator.of(context).pop();
+                      final navigator = Navigator.of(context);
                       setState(() => _isLoading = true);
 
                       rolesState.removeWhere((key, value) => value is Map && (value.values.every((v) => v == false || v == null)));
 
                       await _cadastroService.savePermission(emailController.text, rolesState);
-                      setState(() => _isLoading = false);
+
+                      if(mounted){
+                        setState(() => _isLoading = false);
+                        navigator.pop();
+                      }
                     }
                   },
                   child: const Text('Salvar'),
@@ -410,6 +415,7 @@ class _DepartamentosCardState extends State<DepartamentosCard> {
           ElevatedButton(
             onPressed: () async {
               if (formKey.currentState!.validate()) {
+                final navigator = Navigator.of(context);
                 final currentData = await _cadastroService.getDepartamentosMap();
                 if(isEditing && oldKey != null && oldKey != keyController.text) {
                   currentData.remove(oldKey);
@@ -417,7 +423,7 @@ class _DepartamentosCardState extends State<DepartamentosCard> {
                 currentData[keyController.text] = valueController.text;
                 await _cadastroService.saveDepartamentosMap(currentData);
                 setState(() {});
-                Navigator.of(context).pop();
+                navigator.pop();
               }
             },
             child: const Text('Salvar'),
@@ -539,6 +545,7 @@ class _SituacoesCardState extends State<SituacoesCard> {
     final highestId = currentData.keys.map(int.parse).reduce((a, b) => a > b ? a : b);
     final nextId = (highestId + 1).toString();
 
+    if(!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -562,10 +569,11 @@ class _SituacoesCardState extends State<SituacoesCard> {
           ElevatedButton(
             onPressed: () async {
               if (formKey.currentState!.validate()) {
+                final navigator = Navigator.of(context);
                 currentData[nextId] = valueController.text;
                 await _cadastroService.saveSituacoes(currentData);
                 setState(() {});
-                Navigator.of(context).pop();
+                navigator.pop();
               }
             },
             child: const Text('Salvar'),
@@ -596,11 +604,12 @@ class _SituacoesCardState extends State<SituacoesCard> {
           ElevatedButton(
             onPressed: () async {
               if (formKey.currentState!.validate()) {
+                final navigator = Navigator.of(context);
                 final currentData = await _cadastroService.getSituacoes();
                 currentData[key] = valueController.text;
                 await _cadastroService.saveSituacoes(currentData);
                 setState(() {});
-                Navigator.of(context).pop();
+                navigator.pop();
               }
             },
             child: const Text('Salvar'),
@@ -718,6 +727,7 @@ class _MediunidadeCardState extends State<MediunidadeCard> {
           ElevatedButton(
             onPressed: () async {
               if (formKey.currentState!.validate()) {
+                final navigator = Navigator.of(context);
                 final list = isEditing ? currentList! : await _cadastroService.getTiposMediunidade();
                 if(isEditing && index != null) {
                   list[index] = valueController.text;
@@ -726,7 +736,7 @@ class _MediunidadeCardState extends State<MediunidadeCard> {
                 }
                 await _cadastroService.saveTiposMediunidadeList(list);
                 setState(() {});
-                Navigator.of(context).pop();
+                navigator.pop();
               }
             },
             child: const Text('Salvar'),
@@ -743,15 +753,18 @@ Future<void> _deleteEntry({
   required String itemName,
   required Future<void> Function() onConfirm,
 }) async {
+  final navigator = Navigator.of(context);
+  final scaffoldMessenger = ScaffoldMessenger.of(context);
+
   final confirm = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Confirmar Exclusão'),
       content: Text('Tem certeza que deseja excluir "$itemName"?'),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+        TextButton(onPressed: () => navigator.pop(false), child: const Text('Cancelar')),
         TextButton(
-          onPressed: () => Navigator.of(ctx).pop(true),
+          onPressed: () => navigator.pop(true),
           child: const Text('Excluir', style: TextStyle(color: Colors.red)),
         ),
       ],
@@ -759,7 +772,12 @@ Future<void> _deleteEntry({
   );
 
   if (confirm == true) {
-    // A lógica de isLoading será tratada dentro de cada card
-    await onConfirm();
+    try {
+      await onConfirm();
+    } catch (e) {
+      if(scaffoldMessenger.mounted){
+        scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
+      }
+    }
   }
 }

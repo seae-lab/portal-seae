@@ -10,6 +10,7 @@ import 'package:projetos/models/documento.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
+
 import '../../../models/dados_pessoais.dart';
 import '../../../models/membro.dart';
 
@@ -37,7 +38,6 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   List<String> _allDepartamentos = [];
   Map<String, String> _allSituacoes = {};
   List<String> _allAnosContribuicao = [];
-  List<String> _allTiposMediunidade = [];
 
   final Map<String, String> _meses = {
     'janeiro': 'Janeiro',
@@ -175,14 +175,12 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       final allDepartamentos = await _cadastroService.getDepartamentos();
       final allSituacoes = await _cadastroService.getSituacoes();
       final allAnosContribuicao = await _cadastroService.getAnosContribuicao();
-      final allTiposMediunidade = await _cadastroService.getTiposMediunidade();
 
       if (mounted) {
         setState(() {
           _allDepartamentos = allDepartamentos;
           _allSituacoes = allSituacoes;
           _allAnosContribuicao = allAnosContribuicao..sort((a, b) => b.compareTo(a));
-          _allTiposMediunidade = allTiposMediunidade;
 
           final mesesKeys = _meses.keys.toList();
           for (final ano in _allAnosContribuicao) {
@@ -208,6 +206,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
   Future<void> _pickImage() async {
     if (_isNewMember) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Por favor, salve o membro antes de adicionar uma foto.'),
@@ -290,10 +289,12 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             );
             _formData.foto = downloadUrl;
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('É necessário preencher o CPF para salvar a foto.'),
-              backgroundColor: Colors.orange,
-            ));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('É necessário preencher o CPF para salvar a foto.'),
+                backgroundColor: Colors.orange,
+              ));
+            }
           }
         }
 
@@ -391,7 +392,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return LoadingOverlay( // Adicionado o LoadingOverlay
+    return LoadingOverlay(
       isLoading: _isSaving || _isLoadingBases,
       child: Scaffold(
         appBar: AppBar(
@@ -487,8 +488,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             Wrap(
               spacing: 8.0,
               runSpacing: 4.0,
-              // Combina os departamentos do banco de dados com os do usuário
-              children: [..._allDepartamentos.toSet(), ..._formData.atividades].toSet().map((depto) {
+              children: {..._allDepartamentos, ..._formData.atividades}.map((depto) {
                 final bool isSelected = _formData.atividades.contains(depto);
                 return FilterChip(
                   label: Text(depto),
@@ -651,6 +651,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // O map abaixo cria a lista de documentos
             ..._formData.documentos.asMap().entries.map((entry) {
               final index = entry.key;
               final doc = entry.value;
@@ -664,12 +665,23 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // AQUI ESTÁ O BOTÃO QUE VOCÊ PERGUNTOU
                       IconButton(
                         icon: const Icon(Icons.download),
-                        tooltip: 'Baixar',
+                        tooltip: 'Baixar/Visualizar',
                         onPressed: () async {
-                          if (await canLaunchUrl(Uri.parse(doc.url))) {
-                            await launchUrl(Uri.parse(doc.url));
+                          // Esta é a lógica para abrir o documento
+                          final url = Uri.parse(doc.url);
+                          if (await canLaunchUrl(url)) {
+                            // Usar 'externalApplication' garante que abra no navegador
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } else {
+                            // Se não puder abrir, mostra um erro
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Não foi possível abrir o documento: ${doc.url}')),
+                              );
+                            }
                           }
                         },
                       ),
@@ -735,6 +747,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             child: InkWell(
               onTap: () async {
                 final allTiposMediunidade = await _cadastroService.getTiposMediunidade();
+                if(!mounted) return;
                 final List<String>? result = await showDialog<List<String>>(
                   context: context,
                   builder: (BuildContext context) => MultiSelectDialog(items: allTiposMediunidade, initialSelectedItems: _formData.tiposMediunidade),

@@ -10,6 +10,7 @@ import 'package:projetos/widgets/loading_overlay.dart';
 import '../../../models/membro.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+//NÃO TIRAR, universal_html não funciona aqui
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:flutter/services.dart';
@@ -243,7 +244,7 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
     bool isFlexible = false,
   }) {
     final dropdown = DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       isExpanded: true,
       decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
       items: items,

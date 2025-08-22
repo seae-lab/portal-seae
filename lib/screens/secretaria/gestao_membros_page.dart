@@ -410,7 +410,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }) {
     final TextEditingController newDepartmentController = TextEditingController();
     List<String> allItems = items.toSet().toList()..sort();
-    final List<String> tempSelected = List.from(selectedItems);
+    final List<String> tempSelected = [...selectedItems];
 
     showDialog(
       context: context,
@@ -512,7 +512,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     required List<String> selectedOptions,
     required Function(List<String>) onConfirm,
   }) {
-    final List<String> tempSelected = List.from(selectedOptions);
+    final List<String> tempSelected = [...selectedOptions];
     showDialog(
       context: context,
       builder: (context) {
@@ -738,7 +738,7 @@ class MemberListItem extends StatelessWidget {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                 ],
               ),
             ),

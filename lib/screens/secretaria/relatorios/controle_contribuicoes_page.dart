@@ -5,6 +5,7 @@ import 'package:projetos/services/cadastro_service.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+//NÃO TIRAR, universal_html não funciona aqui
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:intl/intl.dart';
@@ -221,7 +222,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
                   border: OutlineInputBorder(),
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 items: _availableYears.map((String year) {
                   return DropdownMenuItem<String>(
                     value: year,
@@ -318,14 +319,14 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: DataTable(
-              headingRowColor: MaterialStateColor.resolveWith((states) => Colors.grey.shade200),
+              headingRowColor: WidgetStateColor.resolveWith((states) => Colors.grey.shade200),
               columns: [
                 const DataColumn(label: Text('Nome', style: TextStyle(fontWeight: FontWeight.bold))),
                 const DataColumn(label: Text('Dados\nAtualizados', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
                 ..._activeMonths.map((monthKey) {
                   final monthLabel = meses[mesesKeys.indexOf(monthKey)];
                   return DataColumn(label: Text(monthLabel, style: const TextStyle(fontWeight: FontWeight.bold)));
-                }).toList(),
+                }),
               ],
               rows: _filteredMembers.map((membro) {
                 final year = _selectedYear ?? DateTime.now().year.toString();
@@ -430,14 +431,14 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
 
   pw.Widget _buildContentTable(pw.Context context) {
     final year = _selectedYear ?? DateTime.now().year.toString();
-    final tableHeaders = ['Nome', 'Dados Atualizados', ..._activeMonths.map((monthKey) => meses[mesesKeys.indexOf(monthKey)]).toList()];
+    final tableHeaders = ['Nome', 'Dados Atualizados', ..._activeMonths.map((monthKey) => meses[mesesKeys.indexOf(monthKey)])];
     final tableData = _filteredMembers.map((membro) {
       final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
       final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
       return [
         membro.nome,
         membro.atualizacao ? 'Sim' : 'Não',
-        ..._activeMonths.map((monthKey) => (mesesData[monthKey] ?? false) ? 'Sim' : 'Não').toList(),
+        ..._activeMonths.map((monthKey) => (mesesData[monthKey] ?? false) ? 'Sim' : 'Não'),
       ];
     }).toList();
 

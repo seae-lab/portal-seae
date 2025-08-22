@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
+//NÃO TIRAR, universal_html não funciona aqui
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:flutter/services.dart';
@@ -56,7 +57,7 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
     'ultima_atualizacao': 'Última Atualização',
     'situacao_nome': 'Situação',
   };
-  Set<String> _activeColumns = {'nome', 'cpf', 'situacao_nome'};
+  final Set<String> _activeColumns = {'nome', 'cpf', 'situacao_nome'};
   Map<String, String> _situacoesMap = {};
 
 
