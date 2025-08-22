@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
+import 'package:projetos/utils/bairros_coordenadas.dart';
 import '../models/documento.dart';
 import '../models/membro.dart';
 
@@ -27,6 +29,8 @@ class CadastroService {
       _firestore.doc('bases/base_tipos_mediunidade');
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  final Map<String, LatLng> _bairroCoordenadasCache = {};
 
   // Permissions
   CollectionReference get permissionsCollection => _firestore.collection('base_permissoes');
@@ -91,6 +95,29 @@ class CadastroService {
     }
     return {};
   }
+
+  Future<LatLng?> getCoordinatesFromBairro(String bairro) async {
+    if (bairro.isEmpty) return null;
+
+    // Normaliza o nome do bairro para o formato do mapa local (minúsculo)
+    final normalizedBairro = bairro.trim().toLowerCase();
+
+    // Tenta pegar do cache em memória
+    if (_bairroCoordenadasCache.containsKey(normalizedBairro)) {
+      return _bairroCoordenadasCache[normalizedBairro];
+    }
+
+    // Tenta a base de dados local
+    final LatLng? localCoords = BAIRROS_COORDENADAS[normalizedBairro];
+    if (localCoords != null) {
+      _bairroCoordenadasCache[normalizedBairro] = localCoords;
+      return localCoords;
+    }
+
+    // Se o bairro não estiver no cache nem no mapa local, retorna null.
+    return null;
+  }
+
 
   Stream<List<Membro>> getMembros() {
     return membrosCollection.snapshots().map((snapshot) {
@@ -190,21 +217,14 @@ class CadastroService {
 
   Future<void> deleteDocument(String fileUrl) async {
     try {
-      // Cria uma referência para o arquivo a partir da URL de download
       final ref = _storage.refFromURL(fileUrl);
-      // Deleta o arquivo
       await ref.delete();
     } catch (e) {
-      // Se o arquivo não existir, o Firebase joga um erro 'object-not-found'.
-      // Podemos ignorar esse erro específico, pois o resultado final (arquivo deletado) é o mesmo.
       if (e is FirebaseException && e.code == 'object-not-found') {
-        // Arquivo não encontrado no Storage, pode ter sido deletado manualmente.
-        // Prossegue sem lançar erro.
+        // Arquivo não encontrado no Storage. Prossegue sem erro.
       } else {
-        // Lança outros erros para serem tratados na UI
         rethrow;
       }
     }
   }
-
 }

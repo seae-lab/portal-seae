@@ -37,6 +37,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   syncfusion_localizations: ^29.2.11
+  google_maps_flutter: ^2.12.3
+  flutter_map: ^8.2.1
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:

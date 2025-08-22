@@ -1,0 +1,36 @@
+// lib/utils/bairros_coordenadas.dart
+
+import 'package:latlong2/latlong.dart';
+
+const Map<String, LatLng> BAIRROS_COORDENADAS = {
+  'cruzeiro novo': LatLng(-15.7955, -47.9391),
+  'cruzeiro velho': LatLng(-15.7829267, -47.9370514),
+  'asa sul': LatLng(-15.8202, -47.9045),
+  'asa norte': LatLng(-15.7592, -47.8847),
+  'lago sul': LatLng(-15.8450, -47.8760),
+  'lago norte': LatLng(-15.7167, -47.8851),
+  'lago oeste': LatLng(-15.7203676, -47.8657613),
+  'águas claras': LatLng(-15.8378, -48.0264),
+  'setor sudoeste': LatLng(-15.801, -47.9266),
+  'sudoeste': LatLng(-15.795, -47.9267),
+  'setor habitacional jardim botânico': LatLng(-15.8641, -47.8205),
+  'guará': LatLng(-15.8183, -47.9832),
+  'guará i': LatLng(-15.8183, -47.9832),
+  'guará ii': LatLng(-15.8355, -47.9856),
+  'taguatinga norte (taguatinga)': LatLng(-15.8254, -48.1201),
+  'ceilândia': LatLng(-15.8117, -48.1066),
+  'metropolitana (núcleo bandeirante)': LatLng( -15.8802, -47.9743),
+  'paranoá': LatLng(-15.7922, -47.7818),
+  'sobradinho': LatLng(-15.6980, -47.7946),
+  'planaltina': LatLng(-15.6033, -47.6049),
+  'santa maria': LatLng(-16.0353, -47.9866),
+  'samambaia': LatLng(-15.8752, -48.0935),
+  'vicente pires': LatLng(-15.803333, -48.03),
+  'quadras econômicas lúcio costa (guará)': LatLng(-15.8114266, -47.9908246),
+  'quadra eptg qe 2 área especial 2': LatLng(-15.7942287, -47.8821658),
+  'setor de habitações individuais norte': LatLng(-15.4425, -47.5146),
+  'setor habitacional contagem (sobradinho)': LatLng(-15.6872987, -47.8575991),
+  'norte (águas claras)': LatLng(-15.840278, -48.027778),
+  'região dos lagos (sobradinho)': LatLng(-15.6549244, -47.7835319),
+  'área octogonal': LatLng(-15.800278, -47.924167),
+};
