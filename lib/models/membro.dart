@@ -60,11 +60,22 @@ class Membro {
 
     rawContribuicao.forEach((year, value) {
       if (value is Map) {
+        final bool quitado = value['quitado'] ?? false;
+        final mesesDoAno = Map<String, bool>.from(value['meses']?.cast<String, bool>() ?? {});
+
+        // Se o ano está quitado, todos os meses devem ser true.
+        if (quitado) {
+          for (var mes in meses) {
+            mesesDoAno[mes] = true;
+          }
+        }
+
         contribuicaoMap[year] = {
-          'quitado': value['quitado'] ?? false,
-          'meses': Map<String, bool>.from(value['meses']?.cast<String, bool>() ?? {}),
+          'quitado': quitado,
+          'meses': mesesDoAno,
         };
-      } else if (value is bool) {
+
+      } else if (value is bool) { // Caso o valor do ano seja apenas um booleano
         contribuicaoMap[year] = {
           'quitado': value,
           'meses': { for (var m in meses) m: value },
@@ -80,7 +91,7 @@ class Membro {
       atualizacao: data['atualizacao'] ?? false,
       atualizacaoCD: data['atualizacao_CD'] ?? '',
       atualizacaoCF: data['atualizacao_CF'] ?? '',
-      contribuicao: contribuicaoMap, // CORREÇÃO APLICADA AQUI
+      contribuicao: contribuicaoMap,
       dadosPessoais: DadosPessoais.fromMap(data['dados_pessoais'] ?? {}),
       dataAprovacaoCD: data['data_aprovacao_CD'] ?? '',
       dataAtualizacao: data['data_atualizacao'] ?? '',

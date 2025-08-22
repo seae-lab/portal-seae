@@ -310,6 +310,11 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
+  flutter_localizations:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   flutter_modular:
     dependency: "direct main"
     description:
@@ -500,10 +505,10 @@ packages:
     dependency: "direct main"
     description:
       name: intl
-      sha256: d6f56758b7d3014a48af9701c085700aac781a92a87a62b1333b46d8879661cf
+      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
       url: "https://pub.dev"
     source: hosted
-    version: "0.19.0"
+    version: "0.20.2"
   leak_tracker:
     dependency: transitive
     description:
@@ -802,6 +807,14 @@ packages:
     description:
       name: syncfusion_flutter_datepicker
       sha256: "2f61b9c7a7da38c2741061f8485ae2100e4135750590bf5a90f1162a258ebc0e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "29.2.11"
+  syncfusion_localizations:
+    dependency: "direct main"
+    description:
+      name: syncfusion_localizations
+      sha256: "5df8f93c61347447c6dee1e42ce78139be15f80e4fd114828e4b8cfefb4a008f"
       url: "https://pub.dev"
     source: hosted
     version: "29.2.11"

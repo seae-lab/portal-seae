@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
+import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import 'package:projetos/services/auth_service.dart';
 import '../../models/calendar_event_model.dart';
 import '../../services/calendar_service.dart';
@@ -19,13 +21,13 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
   final CalendarService _calendarService = Modular.get<CalendarService>();
   final AuthService _authService = Modular.get<AuthService>();
 
-  late final bool canEdit;
+  final CalendarController _calendarController = CalendarController();
 
+  late final bool canEdit;
   String _selectedTagFilter = 'Todos';
   final List<String> _tagOptions = ['Todos', '1º Ciclo', '2º Ciclo', '3º Ciclo', 'Outros'];
 
-  // CORREÇÃO: A visão é controlada por uma variável de estado simples.
-  CalendarView _currentView = CalendarView.month;
+  bool _isMonthView = true;
 
   @override
   void initState() {
@@ -33,28 +35,47 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
     canEdit = _authService.currentUserPermissions?.hasRole('admin') ?? false;
   }
 
+  void _onYearViewChanged(DateRangePickerViewChangedArgs args) {
+    if (args.view == DateRangePickerView.month) {
+      final DateTime selectedMonth = args.visibleDateRange.startDate!;
+      _calendarController.displayDate = selectedMonth;
+      setState(() {
+        _isMonthView = true;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // CORREÇÃO: Define a cor do ícone e do texto do dropdown baseada no tema da AppBar
-    final appBarIconColor = Theme.of(context).appBarTheme.iconTheme?.color ?? Colors.white;
-    final appBarTextColor = Theme.of(context).appBarTheme.titleTextStyle?.color ?? Colors.white;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Calendário de Encontros - DIJ'),
         actions: [
+          if (_isMonthView) ...[
+            IconButton(
+              icon: const Icon(Icons.chevron_left),
+              tooltip: 'Mês Anterior',
+              onPressed: () {
+                _calendarController.backward!();
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right),
+              tooltip: 'Próximo Mês',
+              onPressed: () {
+                _calendarController.forward!();
+              },
+            ),
+          ],
+          const SizedBox(width: 20),
           IconButton(
-            icon: Icon(_currentView == CalendarView.month
-                ? Icons.view_agenda_outlined
+            icon: Icon(_isMonthView
+                ? Icons.calendar_view_month_outlined
                 : Icons.calendar_month_outlined),
-            tooltip: _currentView == CalendarView.month
-                ? 'Ver Agenda Anual'
-                : 'Ver Mês',
+            tooltip: _isMonthView ? 'Ver Ano' : 'Ver Mês',
             onPressed: () {
               setState(() {
-                _currentView = _currentView == CalendarView.month
-                    ? CalendarView.schedule
-                    : CalendarView.month;
+                _isMonthView = !_isMonthView;
               });
             },
           ),
@@ -63,10 +84,8 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedTagFilter,
-                icon: Icon(Icons.filter_list, color: appBarIconColor),
+                icon: const Icon(Icons.filter_list),
                 dropdownColor: Colors.blueGrey[800],
-                // CORREÇÃO: O estilo do texto agora se adapta ao tema da AppBar
-                style: TextStyle(color: appBarTextColor, fontSize: 16),
                 onChanged: (String? newValue) {
                   setState(() {
                     _selectedTagFilter = newValue!;
@@ -75,8 +94,7 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
                 items: _tagOptions.map<DropdownMenuItem<String>>((String value) {
                   return DropdownMenuItem<String>(
                     value: value,
-                    // O texto dentro do menu suspenso será sempre branco para contrastar
-                    child: Text(value, style: const TextStyle(color: Colors.white)),
+                    child: Text(value),
                   );
                 }).toList(),
               ),
@@ -96,53 +114,62 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
 
           var allEvents = snapshot.data?.docs
               .map((doc) => CalendarEventModel.fromFirestore(doc))
-              .toList() ?? [];
+              .toList() ??
+              [];
 
           List<CalendarEventModel> filteredEvents;
           if (_selectedTagFilter == 'Todos') {
             filteredEvents = allEvents;
           } else {
-            filteredEvents = allEvents.where((event) => event.tag == _selectedTagFilter).toList();
+            filteredEvents = allEvents
+                .where((event) => event.tag == _selectedTagFilter)
+                .toList();
           }
 
-          return SfCalendar(
-            view: _currentView,
-            dataSource: MeetingDataSource(filteredEvents),
-            // CORREÇÃO: Força a visão de agenda a iniciar em 1º de Janeiro do ano atual
-            initialDisplayDate: _currentView == CalendarView.schedule
-                ? DateTime(DateTime.now().year, 1, 1)
-                : DateTime.now(),
-            headerHeight: 50,
-            headerStyle: const CalendarHeaderStyle(
-                textAlign: TextAlign.center,
-                textStyle: TextStyle(fontSize: 20)
-            ),
-            scheduleViewSettings: const ScheduleViewSettings(
-              appointmentItemHeight: 70,
-              monthHeaderSettings: MonthHeaderSettings(
-                height: 60,
-                textAlign: TextAlign.left,
-                backgroundColor: Color(0xFF3F51B5), // Cor índigo, mais padrão
-                monthTextStyle: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+          if (_isMonthView) {
+            return Listener(
+              onPointerSignal: (pointerSignal) {
+                if (pointerSignal is PointerScrollEvent) {
+                  if (pointerSignal.scrollDelta.dy > 0) {
+                    _calendarController.forward!();
+                  } else if (pointerSignal.scrollDelta.dy < 0) {
+                    _calendarController.backward!();
+                  }
+                }
+              },
+              child: SfCalendar(
+                controller: _calendarController,
+                dataSource: MeetingDataSource(filteredEvents),
+                view: CalendarView.month,
+                headerHeight: 50,
+                headerStyle: const CalendarHeaderStyle(
+                    textAlign: TextAlign.center,
+                    textStyle: TextStyle(fontSize: 20)),
+                monthViewSettings: const MonthViewSettings(
+                  showAgenda: true,
+                  agendaItemHeight: 50,
                 ),
+                onTap: canEdit ? _onCalendarTapped : null,
               ),
-            ),
-            monthViewSettings: const MonthViewSettings(
-              showAgenda: true,
-              agendaItemHeight: 50,
-            ),
-            onTap: canEdit ? _onCalendarTapped : null,
-          );
+            );
+          } else {
+            return SfDateRangePicker(
+              view: DateRangePickerView.year,
+              allowViewNavigation: true,
+              onViewChanged: _onYearViewChanged,
+              monthViewSettings: const DateRangePickerMonthViewSettings(
+                firstDayOfWeek: 1,
+              ),
+            );
+          }
         },
       ),
-      floatingActionButton: canEdit
+      floatingActionButton: canEdit && _isMonthView
           ? FloatingActionButton(
         onPressed: () => _showAddEventDialog(selectedDate: DateTime.now()),
         tooltip: 'Adicionar Evento',
-        child: const Icon(Icons.add),
+        backgroundColor: const Color.fromRGBO(45, 55, 131, 1),
+        child: const Icon(Icons.add, color: Colors.white),
       )
           : null,
     );
@@ -152,13 +179,11 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
     if (details.targetElement == CalendarElement.appointment) {
       final CalendarEventModel event = details.appointments!.first;
       _showAddEventDialog(event: event);
-    } else if (details.targetElement == CalendarElement.calendarCell) {
-      final DateTime selectedDate = details.date!;
-      _showAddEventDialog(selectedDate: selectedDate);
     }
   }
 
-  void _showAddEventDialog({CalendarEventModel? event, DateTime? selectedDate}) {
+  void _showAddEventDialog(
+      {CalendarEventModel? event, DateTime? selectedDate}) {
     showDialog(
       context: context,
       builder: (context) => EventDialog(
@@ -187,30 +212,21 @@ class MeetingDataSource extends CalendarDataSource {
   MeetingDataSource(List<CalendarEventModel> source) {
     appointments = source;
   }
-
   @override
   DateTime getStartTime(int index) {
     return (appointments![index] as CalendarEventModel).start;
   }
-
   @override
   DateTime getEndTime(int index) {
     return (appointments![index] as CalendarEventModel).end;
   }
-
   @override
   String getSubject(int index) {
     return (appointments![index] as CalendarEventModel).title;
   }
-
   @override
   Color getColor(int index) {
     return (appointments![index] as CalendarEventModel).color;
-  }
-
-  @override
-  Object? getRecurrenceId(int index) {
-    return (appointments![index] as CalendarEventModel).tag;
   }
 }
 
@@ -240,7 +256,8 @@ class _EventDialogState extends State<EventDialog> {
   late DateTime _endDate;
   late Color _selectedColor;
   late String _selectedTag;
-  final List<String> _tagOptions = ['1º Ciclo', '2º Ciclo', '3º Ciclo', 'Outros'];
+
+  final List<String> _cicloOptions = ['Todos', '1º Ciclo', '2º Ciclo', '3º Ciclo', 'Outros'];
   final List<Color> _colorOptions = [
     Colors.blue,
     Colors.red,
@@ -265,10 +282,13 @@ class _EventDialogState extends State<EventDialog> {
       _titleController = TextEditingController();
       _descriptionController = TextEditingController();
       final now = widget.selectedDate ?? DateTime.now();
-      _startDate = DateTime(now.year, now.month, now.day, 19, 0);
-      _endDate = _startDate.add(const Duration(hours: 1));
+
+      // CORREÇÃO 2: Horário padrão para novos eventos
+      _startDate = DateTime(now.year, now.month, now.day, 18, 00); // Início às 18:00
+      _endDate = DateTime(now.year, now.month, now.day, 19, 30);   // Fim às 19:30
+
       _selectedColor = _colorOptions.first;
-      _selectedTag = _tagOptions.first;
+      _selectedTag = _cicloOptions.first;
     }
   }
 
@@ -279,110 +299,117 @@ class _EventDialogState extends State<EventDialog> {
     super.dispose();
   }
 
-  Future<void> _selectDateTime(BuildContext context, bool isStart) async {
-    final date = await showDatePicker(
+  // CORREÇÃO 1: Funções separadas para selecionar data e hora
+  Future<void> _selectDate(bool isStart) async {
+    final DateTime initial = isStart ? _startDate : _endDate;
+    final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: isStart ? _startDate : _endDate,
+      initialDate: initial,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (date == null) return;
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(isStart ? _startDate : _endDate),
-    );
-    if (time == null) return;
-
-    setState(() {
-      final newDateTime =
-      DateTime(date.year, date.month, date.day, time.hour, time.minute);
-      if (isStart) {
-        _startDate = newDateTime;
-        if (_endDate.isBefore(_startDate)) {
-          _endDate = _startDate.add(const Duration(hours: 1));
+    if (pickedDate != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, _startDate.hour, _startDate.minute);
+          // Opcional: ajustar data final se a inicial ultrapassá-la
+          if (_endDate.isBefore(_startDate)) {
+            _endDate = _startDate.add(const Duration(hours: 1, minutes: 30));
+          }
+        } else {
+          _endDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, _endDate.hour, _endDate.minute);
         }
-      } else {
-        _endDate = newDateTime;
-      }
-    });
+      });
+    }
   }
+
+  Future<void> _selectTime(bool isStart) async {
+    final DateTime initial = isStart ? _startDate : _endDate;
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+
+    if (pickedTime != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = DateTime(_startDate.year, _startDate.month, _startDate.day, pickedTime.hour, pickedTime.minute);
+        } else {
+          _endDate = DateTime(_endDate.year, _endDate.month, _endDate.day, pickedTime.hour, pickedTime.minute);
+        }
+      });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.event == null ? 'Adicionar Evento' : 'Editar Evento'),
-      // CORREÇÃO: O SizedBox agora usa uma largura máxima fixa, ideal para diálogos.
+      scrollable: true,
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 550),
-        child: SizedBox(
-          width: double.maxFinite,
-          child: Form(
-            key: _formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(labelText: 'Título', border: OutlineInputBorder()),
-                    validator: (value) =>
-                    value!.isEmpty ? 'O título é obrigatório' : null,
-                  ),
-                  const SizedBox(height: 20), // Mais espaço vertical
-                  DropdownButtonFormField<String>(
-                    value: _selectedTag,
-                    decoration: const InputDecoration(labelText: 'Tag', border: OutlineInputBorder()),
-                    items: _tagOptions.map((String tag) {
-                      return DropdownMenuItem<String>(
-                        value: tag,
-                        child: Text(tag),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      setState(() {
-                        _selectedTag = newValue!;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20), // Mais espaço vertical
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration:
-                    const InputDecoration(labelText: 'Descrição (Opcional)', border: OutlineInputBorder()),
-                    maxLines: 6, // Um pouco mais de altura
-                  ),
-                  const SizedBox(height: 20), // Mais espaço vertical
-                  ListTile(
-                    title: const Text('Início'),
-                    subtitle:
-                    Text(DateFormat('dd/MM/yyyy HH:mm').format(_startDate)),
-                    onTap: () => _selectDateTime(context, true),
-                    trailing: const Icon(Icons.calendar_today),
-                  ),
-                  ListTile(
-                    title: const Text('Fim'),
-                    subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(_endDate)),
-                    onTap: () => _selectDateTime(context, false),
-                    trailing: const Icon(Icons.calendar_today),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    children: _colorOptions.map((color) {
-                      return ChoiceChip(
-                        label: const SizedBox.shrink(),
-                        avatar: CircleAvatar(backgroundColor: color),
-                        selected: _selectedColor == color,
-                        onSelected: (selected) {
-                          if (selected) setState(() => _selectedColor = color);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                    labelText: 'Título', border: OutlineInputBorder()),
+                validator: (value) =>
+                value!.isEmpty ? 'O título é obrigatório' : null,
               ),
-            ),
+              const SizedBox(height: 20),
+              DropdownButtonFormField<String>(
+                value: _selectedTag,
+                decoration: const InputDecoration(
+                    labelText: 'Ciclo', border: OutlineInputBorder()),
+                items: _cicloOptions.map((String tag) {
+                  return DropdownMenuItem<String>(
+                    value: tag,
+                    child: Text(tag),
+                  );
+                }).toList(),
+                onChanged: (newValue) {
+                  setState(() {
+                    _selectedTag = newValue!;
+                  });
+                },
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                    labelText: 'Descrição (Opcional)',
+                    border: OutlineInputBorder()),
+                maxLines: 8,
+              ),
+              const SizedBox(height: 20),
+
+              // CORREÇÃO 1: Layout modificado para separar seleção de data e hora
+              _buildDateTimePicker(label: 'Início', date: _startDate, isStart: true),
+              _buildDateTimePicker(label: 'Fim', date: _endDate, isStart: false),
+
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                children: _colorOptions.map((color) {
+                  return ChoiceChip(
+                    label: const SizedBox.shrink(),
+                    avatar: CircleAvatar(backgroundColor: color),
+                    selected: _selectedColor == color,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() => _selectedColor = color);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
           ),
         ),
       ),
@@ -416,6 +443,61 @@ class _EventDialogState extends State<EventDialog> {
           child: const Text('Salvar'),
         ),
       ],
+    );
+  }
+
+  // CORREÇÃO 1: Widget auxiliar para criar os novos campos de data e hora
+  Widget _buildDateTimePicker({required String label, required DateTime date, required bool isStart}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Botão para Data
+              InkWell(
+                onTap: () => _selectDate(isStart),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(4)
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 18),
+                      const SizedBox(width: 8),
+                      Text(DateFormat('dd/MM/yyyy').format(date)),
+                    ],
+                  ),
+                ),
+              ),
+              // Botão para Hora
+              InkWell(
+                onTap: () => _selectTime(isStart),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(4)
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time, size: 18),
+                      const SizedBox(width: 8),
+                      Text(DateFormat('HH:mm').format(date)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

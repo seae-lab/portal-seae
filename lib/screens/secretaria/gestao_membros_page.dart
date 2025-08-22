@@ -90,16 +90,38 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       return (text: 'Não Contribuinte', color: Colors.blue);
     }
 
-    final int currentYear = DateTime.now().year;
+    final now = DateTime.now();
+    final int currentYear = now.year;
+    final int currentMonthIndex = now.month -1; // 0-indexed
     final String currentYearStr = currentYear.toString();
+
+    final meses = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    final currentMonthStr = meses[currentMonthIndex];
+
+
     final currentYearData = membro.contribuicao[currentYearStr];
 
-    if (currentYearData is Map &&
-        currentYearData['meses'] is Map &&
-        (currentYearData['meses'] as Map).values.any((pago) => pago == true)) {
-      return (text: 'Contribuinte', color: Colors.green);
-    }
+    if (currentYearData is Map) {
+      // 1. Se "Ano Quitado" estiver marcado, é Contribuinte.
+      if (currentYearData['quitado'] == true) {
+        return (text: 'Contribuinte', color: Colors.green);
+      }
 
+      final mesesData = currentYearData['meses'] as Map<String, dynamic>?;
+
+      if (mesesData != null) {
+        // 2. Se o mês atual estiver pago, é Contribuinte.
+        if (mesesData[currentMonthStr] == true) {
+          return (text: 'Contribuinte', color: Colors.green);
+        }
+
+        // 3. Se não, mas qualquer outro mês estiver pago, está em atraso.
+        if (mesesData.values.any((pago) => pago == true)) {
+          return (text: 'Contribuição em Atraso', color: Colors.orange);
+        }
+      }
+    }
+    // 4. Se não houver dados de contribuição para o ano, ou nenhum mês pago.
     return (text: 'Contribuição em Atraso', color: Colors.orange);
   }
 
