@@ -205,7 +205,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   }
 
   Future<void> _pickImage() async {
-    if (_isNewMember) {
+    if (_isNewMember || _formData.id == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -230,7 +230,8 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
 
       try {
         final downloadUrl = await _cadastroService.uploadProfileImage(
-          cpf: _formData.dadosPessoais.cpf,
+          userId: _formData.id!,
+          userName: _formData.nome,
           fileBytes: bytes,
         );
 
@@ -274,6 +275,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
       setState(() => _isSaving = true);
 
       try {
+        // Apenas para garantir que o valor do controller seja salvo
         _formData.dadosPessoais.cpf = _cpfController.text;
 
         if (_isNewMember) {
@@ -282,16 +284,17 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
         }
 
         if (_newImageBytes != null) {
-          if (_formData.dadosPessoais.cpf.isNotEmpty) {
+          if (_formData.id != null && _formData.id!.isNotEmpty) {
             final downloadUrl = await _cadastroService.uploadProfileImage(
-              cpf: _formData.dadosPessoais.cpf,
+              userId: _formData.id!,
+              userName: _formData.nome,
               fileBytes: _newImageBytes!,
             );
             _formData.foto = downloadUrl;
           } else {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('É necessário preencher o CPF para salvar a foto.'),
+                content: Text('É necessário salvar o membro antes de enviar uma foto.'),
                 backgroundColor: Colors.orange,
               ));
             }
@@ -331,6 +334,17 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
   }
 
   Future<void> _pickAndUploadDocument() async {
+    if (_isNewMember || _formData.id == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, salve o membro antes de adicionar documentos.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
@@ -345,20 +359,9 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
           setState(() => _isSaving = true);
         }
         try {
-          final cpf = _cpfController.text.replaceAll(RegExp(r'[^0-9]'), '');
-          if (cpf.isEmpty) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('É necessário preencher o CPF para enviar documentos.'),
-                backgroundColor: Colors.orange,
-              ));
-              setState(() => _isSaving = false);
-            }
-            return;
-          }
-
           final newDocument = await _cadastroService.uploadDocument(
-            cpf: cpf,
+            userId: _formData.id!,
+            userName: _formData.nome,
             fileBytes: fileBytes,
             fileName: fileName,
           );
@@ -367,6 +370,7 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
             setState(() {
               _formData.documentos.add(newDocument);
             });
+            await _cadastroService.saveMembro(_formData);
           }
         } catch (e) {
           if (mounted) {
@@ -384,11 +388,59 @@ class _MembroFormDialogState extends State<MembroFormDialog> {
     }
   }
 
-  void _deleteDocument(int index) {
-    setState(() {
-      _formData.documentos.removeAt(index);
-    });
+  Future<void> _deleteDocument(int index) async {
+    final docToDelete = _formData.documentos[index];
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar Exclusão'),
+        content: Text('Tem certeza que deseja excluir o documento "${docToDelete.nome}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    if (mounted) setState(() => _isSaving = true);
+
+    try {
+      // 1. Deleta o arquivo do Firebase Storage
+      await _cadastroService.deleteDocument(docToDelete.url);
+
+      // 2. Remove da lista local
+      if (mounted) {
+        setState(() {
+          _formData.documentos.removeAt(index);
+        });
+      }
+
+      // 3. Salva o membro no Firestore para persistir a remoção da referência
+      await _cadastroService.saveMembro(_formData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Documento excluído com sucesso!'),
+          backgroundColor: Colors.green,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erro ao excluir documento: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {

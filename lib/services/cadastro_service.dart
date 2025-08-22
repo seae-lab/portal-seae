@@ -140,15 +140,13 @@ class CadastroService {
   }
 
   Future<String> uploadProfileImage({
-    required String cpf,
+    required String userId,
+    required String userName,
     required Uint8List fileBytes,
   }) async {
     try {
-      final cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
-      if (cleanCpf.isEmpty) {
-        throw Exception("CPF inválido para upload de imagem.");
-      }
-      final ref = _storage.ref('profile_images/$cleanCpf.jpg');
+      final safeUserName = userName.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
+      final ref = _storage.ref('profile_images/${userId}_$safeUserName.jpg');
       final metadata = SettableMetadata(contentType: 'image/jpeg');
       final uploadTask = ref.putData(fileBytes, metadata);
       final snapshot = await uploadTask.whenComplete(() => {});
@@ -171,14 +169,15 @@ class CadastroService {
   }
 
   Future<Documento> uploadDocument({
-    required String cpf,
+    required String userId,
+    required String userName,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
     try {
-      final cleanCpf = cpf.replaceAll(RegExp(r'[^0-9]'), '');
+      final safeUserName = userName.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
       final fileExtension = fileName.split('.').last.toLowerCase();
-      final ref = _storage.ref('documentos/$cleanCpf/$fileName');
+      final ref = _storage.ref('documentos/${userId}_$safeUserName/$fileName');
       final metadata = SettableMetadata(contentType: 'application/$fileExtension');
       final uploadTask = ref.putData(fileBytes, metadata);
       final snapshot = await uploadTask.whenComplete(() => {});
@@ -188,4 +187,24 @@ class CadastroService {
       rethrow;
     }
   }
+
+  Future<void> deleteDocument(String fileUrl) async {
+    try {
+      // Cria uma referência para o arquivo a partir da URL de download
+      final ref = _storage.refFromURL(fileUrl);
+      // Deleta o arquivo
+      await ref.delete();
+    } catch (e) {
+      // Se o arquivo não existir, o Firebase joga um erro 'object-not-found'.
+      // Podemos ignorar esse erro específico, pois o resultado final (arquivo deletado) é o mesmo.
+      if (e is FirebaseException && e.code == 'object-not-found') {
+        // Arquivo não encontrado no Storage, pode ter sido deletado manualmente.
+        // Prossegue sem lançar erro.
+      } else {
+        // Lança outros erros para serem tratados na UI
+        rethrow;
+      }
+    }
+  }
+
 }

@@ -1,6 +1,7 @@
 // lib/app_module.dart
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/auth/login_screen.dart';
+import 'package:projetos/screens/dij/calendario_encontros_page.dart'; // IMPORTAR A NOVA PÁGINA
 import 'package:projetos/screens/dij/dij_page.dart';
 import 'package:projetos/screens/home_screen.dart';
 import 'package:projetos/screens/secretaria/dashboard_page.dart';
@@ -16,6 +17,7 @@ import 'package:projetos/screens/secretaria/relatorios/socios_elegiveis_page.dar
 import 'package:projetos/screens/secretaria/relatorios/socios_votantes_page.dart';
 import 'package:projetos/screens/splash_screen.dart';
 import 'package:projetos/services/auth_service.dart';
+import 'package:projetos/services/calendar_service.dart'; // IMPORTAR O NOVO SERVIÇO
 import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
 import 'guards/role_guard.dart';
@@ -26,6 +28,7 @@ class AppModule extends Module {
   void binds(i) {
     i.addSingleton(AuthService.new);
     i.addSingleton(CadastroService.new);
+    i.addSingleton(CalendarService.new); // ADICIONAR O BIND DO NOVO SERVIÇO
   }
 
   @override
@@ -37,6 +40,7 @@ class AppModule extends Module {
         child: (context) => const HomeScreen(),
         guards: [AuthGuard()],
         children: [
+          // ... (rotas da secretaria inalteradas)
           ChildRoute('/dashboard',
               child: (context) => const DashboardPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_dashboard'])]),
@@ -73,8 +77,13 @@ class AppModule extends Module {
           ChildRoute('/gestao_bases',
               child: (context) => const GestaoBasesPage(),
               guards: [RoleGuard(allowedRoles: ['admin'])]),
+
+          // ROTAS DO DIJ
           ChildRoute('/dij',
               child: (context) => const DijPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij'])]),
+          ChildRoute('/dij/calendario',
+              child: (context) => const CalendarioEncontrosPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'dij'])])
         ]);
   }

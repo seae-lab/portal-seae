@@ -38,9 +38,11 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                 final secretariaRoutes = [
                   '/home/dashboard',
                   '/home/gestao_membros',
-                  '/home/gestao_bases', // Rota adicionada para manter o menu aberto
+                  '/home/gestao_bases',
                   '/home/relatorios_membros'
                 ];
+                // Adicionado para controlar o estado expandido do menu DIJ
+                final dijRoutes = ['/home/dij', '/home/dij/calendario'];
 
                 return ListView(
                   children: [
@@ -64,7 +66,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                               route: '/home/gestao_membros',
                               isSelected: currentRoute.startsWith('/home/gestao_membros'),
                             ),
-                          if (permissions?.hasRole('admin') ?? false) // Apenas admins veem este item
+                          if (permissions?.hasRole('admin') ?? false)
                             _buildSubMenuItem(
                               title: 'Gestão de Bases',
                               route: '/home/gestao_bases',
@@ -81,12 +83,25 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                       ),
 
                     if (permissions?.hasRole('dij') ?? false)
-                      _buildSimpleMenuItem(
+                      _buildDepartmentMenu( // ALTERADO PARA MENU EXPANSÍVEL
+                        context: context,
                         title: 'DIJ',
                         icon: Icons.book_outlined,
                         isCollapsed: _isCollapsed && widget.isDesktop,
-                        route: '/home/dij',
-                        isSelected: currentRoute.startsWith('/home/dij'),
+                        mainPageRoute: '/home/dij', // Rota principal
+                        subItems: [
+                          _buildSubMenuItem(
+                            title: 'Página Principal',
+                            route: '/home/dij',
+                            isSelected: currentRoute == '/home/dij',
+                          ),
+                          _buildSubMenuItem(
+                            title: 'Calendário de Encontros',
+                            route: '/home/dij/calendario',
+                            isSelected: currentRoute.startsWith('/home/dij/calendario'),
+                          ),
+                        ],
+                        isExpanded: dijRoutes.any((route) => currentRoute.startsWith(route)),
                       ),
                   ],
                 );
@@ -158,7 +173,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
     final action = onTap ?? () {
       Modular.to.navigate(route!);
       if (!widget.isDesktop) {
-        Navigator.of(context).pop(); // Fecha o drawer no celular
+        Navigator.of(context).pop();
       }
     };
 
@@ -194,7 +209,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
         onTap: () {
           Modular.to.navigate(route);
           if (!widget.isDesktop) {
-            Navigator.of(context).pop(); // Fecha o drawer no celular
+            Navigator.of(context).pop();
           }
         },
         dense: true,
