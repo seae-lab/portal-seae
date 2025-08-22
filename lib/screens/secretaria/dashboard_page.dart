@@ -337,6 +337,10 @@ class _DashboardPageState extends State<DashboardPage> {
     for (var membro in membros) {
       membro.contribuicao.forEach((year, data) {
         if (data is Map) {
+          if (data['quitado'] == true) {
+            contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
+            return;
+          }
           final meses = data['meses'] as Map<String, dynamic>?;
           if (meses != null && meses.values.any((isPaid) => isPaid == true)) {
             contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;

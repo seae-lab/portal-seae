@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
-
 import '../models/documento.dart';
 import '../models/membro.dart';
 
@@ -28,6 +27,53 @@ class CadastroService {
       _firestore.doc('bases/base_tipos_mediunidade');
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  // Permissions
+  CollectionReference get permissionsCollection => _firestore.collection('base_permissoes');
+
+  Stream<List<QueryDocumentSnapshot>> getPermissions() {
+    return permissionsCollection.snapshots().map((snapshot) => snapshot.docs);
+  }
+
+  Future<void> savePermission(String email, Map<String, dynamic> roles) {
+    return permissionsCollection.doc(email).set(roles);
+  }
+
+  Future<void> deletePermission(String email) {
+    return permissionsCollection.doc(email).delete();
+  }
+
+  // Departments (as a map)
+  Future<Map<String, dynamic>> getDepartamentosMap() async {
+    final snapshot = await _departamentosDoc.get();
+    if (!snapshot.exists || snapshot.data() == null) return {};
+    return snapshot.data() as Map<String, dynamic>;
+  }
+
+  Future<void> saveDepartamentosMap(Map<String, dynamic> departamentos) {
+    return _departamentosDoc.set(departamentos);
+  }
+
+  // Situations (save method)
+  Future<void> saveSituacoes(Map<String, String> situacoes) {
+    final data = situacoes.map((key, value) => MapEntry(key, value as dynamic));
+    return _situacoesDoc.set(data);
+  }
+
+  // Tipos Mediunidade (as a map)
+  Future<Map<String, dynamic>> getTiposMediunidadeMap() async {
+    final snapshot = await _tiposMediunidadeDoc.get();
+    if (!snapshot.exists || snapshot.data() == null) return {};
+    return snapshot.data() as Map<String, dynamic>;
+  }
+
+  Future<void> saveTiposMediunidadeMap(Map<String, dynamic> tipos) {
+    return _tiposMediunidadeDoc.set(tipos);
+  }
+
+  Future<void> saveTiposMediunidadeList(List<String> tipos) {
+    return _tiposMediunidadeDoc.set({'mediunidades': tipos});
+  }
 
   Future<Map<String, String>> fetchCep(String cep) async {
     final response = await http.get(Uri.parse('https://viacep.com.br/ws/$cep/json/'));

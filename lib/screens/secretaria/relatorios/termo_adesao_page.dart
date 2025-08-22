@@ -1,6 +1,4 @@
 // lib/screens/secretaria/relatorios/termo_adesao_page.dart
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:intl/intl.dart';
@@ -11,9 +9,6 @@ import 'package:projetos/models/membro.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
 import 'package:flutter/services.dart';
-
-// Use universal_html to avoid platform errors
-import 'package:universal_html/html.dart' as html;
 
 class TermoAdesaoPage extends StatefulWidget {
   const TermoAdesaoPage({super.key});
@@ -238,16 +233,10 @@ class _TermoAdesaoPageState extends State<TermoAdesaoPage> {
       ),
     );
 
-    final bytes = await pdf.save();
-    if (kIsWeb) {
-      final blob = html.Blob([bytes], 'application/pdf');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.window.open(url, '_blank');
-      html.Url.revokeObjectUrl(url);
-    } else {
-      await Printing.layoutPdf(onLayout: (format) async => bytes);
+    await Printing.layoutPdf(onLayout: (format) async => await pdf.save());
+    if (mounted) {
+      setState(() => _isGeneratingPdf = false);
     }
-    setState(() => _isGeneratingPdf = false);
   }
 
   pw.Widget _buildSignatureLine(String text) {

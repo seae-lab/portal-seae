@@ -38,6 +38,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                 final secretariaRoutes = [
                   '/home/dashboard',
                   '/home/gestao_membros',
+                  '/home/gestao_bases', // Rota adicionada para manter o menu aberto
                   '/home/relatorios_membros'
                 ];
 
@@ -62,6 +63,12 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                               title: 'Gestão de Membros',
                               route: '/home/gestao_membros',
                               isSelected: currentRoute.startsWith('/home/gestao_membros'),
+                            ),
+                          if (permissions?.hasRole('admin') ?? false) // Apenas admins veem este item
+                            _buildSubMenuItem(
+                              title: 'Gestão de Bases',
+                              route: '/home/gestao_bases',
+                              isSelected: currentRoute.startsWith('/home/gestao_bases'),
                             ),
                           if (permissions?.hasRole('secretaria_relatorios') ?? false)
                             _buildSubMenuItem(

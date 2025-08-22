@@ -32,11 +32,17 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchTerm = '';
 
-  List<String> _selectedStatusIds = [];
+  List<String> _selectedStatus = []; // Unifica filtros de situação e contribuição
   List<String> _selectedDepartments = [];
   List<String> _selectedContributionYears = [];
   Future<_PageDependencies>? _dependenciesFuture;
-  bool _isLoading = true; // Novo estado de carregamento para a página
+  bool _isLoading = true;
+
+  // Chaves especiais para os filtros de status de contribuição
+  static const String _emAtrasoKey = 'status_contribuicao_em_atraso';
+  static const String _contribuinteKey = 'status_contribuicao_contribuinte';
+  static const String _naoContribuinteKey = 'status_contribuicao_nao_contribuinte';
+
 
   @override
   void initState() {
@@ -77,6 +83,26 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     super.dispose();
   }
 
+  ({String text, Color color}) _getContributionStatusForMember(Membro membro) {
+    final bool isSocioEfetivo = membro.situacaoSEAE == 4;
+
+    if (!isSocioEfetivo) {
+      return (text: 'Não Contribuinte', color: Colors.blue);
+    }
+
+    final int currentYear = DateTime.now().year;
+    final String currentYearStr = currentYear.toString();
+    final currentYearData = membro.contribuicao[currentYearStr];
+
+    if (currentYearData is Map &&
+        currentYearData['meses'] is Map &&
+        (currentYearData['meses'] as Map).values.any((pago) => pago == true)) {
+      return (text: 'Contribuinte', color: Colors.green);
+    }
+
+    return (text: 'Contribuição em Atraso', color: Colors.orange);
+  }
+
   void _showMemberForm({Membro? membro}) {
     showDialog(
       context: context,
@@ -84,7 +110,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     ).then((_) {
       if (mounted) {
         setState(() {
-          _isLoading = true; // Inicia o loading novamente após o form ser fechado
+          _isLoading = true;
           _loadDependenciesAndMembers();
         });
       }
@@ -101,17 +127,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
           actions: <Widget>[
             TextButton(
               child: const Text('Cancelar'),
-              onPressed: () {
-                Navigator.of(ctx).pop();
-              },
+              onPressed: () => Navigator.of(ctx).pop(),
             ),
             TextButton(
               child: const Text('Excluir', style: TextStyle(color: Colors.red)),
               onPressed: () async {
                 Navigator.of(ctx).pop();
-                if (mounted) {
-                  setState(() => _isLoading = true);
-                }
+                if (mounted) setState(() => _isLoading = true);
                 try {
                   await _cadastroService.deleteMembro(membro.id!);
                   if (mounted) {
@@ -122,9 +144,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir membro: $error'), backgroundColor: Colors.red));
                   }
                 } finally {
-                  if (mounted) {
-                    _loadDependenciesAndMembers(); // Recarrega os dados para atualizar a lista
-                  }
+                  if (mounted) _loadDependenciesAndMembers();
                 }
               },
             ),
@@ -143,13 +163,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
         title: const Text('Gestão de Membros'),
         centerTitle: false,
       ),
-      body: LoadingOverlay( // Adicionado o LoadingOverlay
+      body: LoadingOverlay(
         isLoading: _isLoading,
         child: FutureBuilder<_PageDependencies>(
           future: _dependenciesFuture,
           builder: (context, dependenciesSnapshot) {
             if (dependenciesSnapshot.connectionState == ConnectionState.waiting && _isLoading) {
-              return const SizedBox.shrink(); // Retorna um widget vazio, pois o overlay já está cobrindo a tela.
+              return const SizedBox.shrink();
             }
             if (dependenciesSnapshot.hasError) {
               return Center(child: Text('Erro ao carregar dependências: ${dependenciesSnapshot.error}'));
@@ -202,9 +222,17 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                             membro.dadosPessoais.cpf.toLowerCase().contains(_searchTerm.toLowerCase()) ||
                             membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase());
 
-                        final matchesStatus = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
+                        final statusIds = _selectedStatus.where((s) => !s.startsWith('status_contribuicao')).toList();
+                        final contributionStatusFilters = _selectedStatus.where((s) => s.startsWith('status_contribuicao')).toList();
 
-                        // LÓGICA DE FILTRO DE DEPARTAMENTO ATUALIZADA
+                        final memberStatus = _getContributionStatusForMember(membro);
+                        bool matchesContributionStatus = contributionStatusFilters.isEmpty ||
+                            (contributionStatusFilters.contains(_emAtrasoKey) && memberStatus.text == 'Contribuição em Atraso') ||
+                            (contributionStatusFilters.contains(_contribuinteKey) && memberStatus.text == 'Contribuinte') ||
+                            (contributionStatusFilters.contains(_naoContribuinteKey) && memberStatus.text == 'Não Contribuinte');
+
+                        final matchesStatus = statusIds.isEmpty || statusIds.contains(membro.situacaoSEAE.toString());
+
                         final matchesDepartment = _selectedDepartments.isEmpty ||
                             _selectedDepartments.any((selectedDepto) =>
                                 membro.atividades.any((depto) => depto.startsWith(selectedDepto)));
@@ -213,16 +241,16 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                             _selectedContributionYears.any((year) {
                               final contribuicaoAno = membro.contribuicao[year];
                               if (contribuicaoAno is Map) {
+                                if (contribuicaoAno['quitado'] == true) return true;
                                 final meses = contribuicaoAno['meses'] as Map<String, dynamic>?;
                                 return meses != null && meses.values.any((pago) => pago == true);
                               }
                               return false;
                             });
 
-                        return matchesSearchTerm && matchesStatus && matchesDepartment && matchesContributionYear;
+                        return matchesSearchTerm && (matchesStatus && matchesContributionStatus) && matchesDepartment && matchesContributionYear;
                       }).toList();
 
-                      // ** ADICIONADO: Ordenação alfabética da lista filtrada **
                       filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
 
                       if (filteredMembers.isEmpty) {
@@ -242,6 +270,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                               canEdit: canEdit,
                               situacoes: dependencies.situacoes,
                               allAnosContribuicao: dependencies.anosContribuicao,
+                              getContributionStatus: () => _getContributionStatusForMember(membro),
                             ),
                           );
                         },
@@ -268,7 +297,6 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   Widget _buildFilters(_PageDependencies dependencies) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Usa Row para telas mais largas e Column para telas mais estreitas
         if (constraints.maxWidth > 700) {
           return Row(
             children: [
@@ -294,29 +322,34 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Widget _buildStatusFilter(Map<String, String> situacoes) {
+    final Map<String, String> allStatusOptions = {
+      ...situacoes,
+      _contribuinteKey: 'Contribuinte',
+      _emAtrasoKey: 'Contribuição em Atraso',
+      _naoContribuinteKey: 'Não Contribuinte',
+    };
+
     return InkWell(
       onTap: () => _showMultiSelectDialog(
         title: 'Filtrar por Situação',
-        options: situacoes.entries.map((e) => e.value).toList(),
-        selectedOptions: _selectedStatusIds.map((id) => situacoes[id] ?? id).toList(),
+        options: allStatusOptions,
+        selectedOptions: _selectedStatus,
         onConfirm: (values) {
           setState(() {
-            final Map<String, String> reversedSituacoes = situacoes.map((key, value) => MapEntry(value, key));
-            _selectedStatusIds = values.map((name) => reversedSituacoes[name] ?? '').where((id) => id.isNotEmpty).toList();
+            _selectedStatus = values;
           });
         },
       ),
       child: InputDecorator(
         decoration: _filterDecoration().copyWith(labelText: 'Situação'),
-        child: Text(_selectedStatusIds.isEmpty
+        child: Text(_selectedStatus.isEmpty
             ? 'Todas as Situações'
-            : '${_selectedStatusIds.length} Selecionada(s)'),
+            : '${_selectedStatus.length} Selecionada(s)'),
       ),
     );
   }
 
   Widget _buildDepartmentFilter(List<String> departamentos) {
-    // Processa a lista de departamentos para extrair apenas a parte principal (antes da /)
     final mainDepartments = departamentos.map((d) => d.split('/').first).toSet().toList();
 
     return InkWell(
@@ -343,7 +376,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     return InkWell(
       onTap: () => _showMultiSelectDialog(
         title: 'Filtrar por Ano de Contribuição',
-        options: anos,
+        options: { for (var ano in anos) ano: ano },
         selectedOptions: _selectedContributionYears,
         onConfirm: (values) {
           setState(() {
@@ -369,12 +402,6 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     );
   }
 
-  // lib/screens/secretaria/gestao_membros_page.dart
-
-// ... (imports existentes)
-
-// ... (resto da classe _GestaoMembrosPageState)
-
   void _showManualAndMultiSelectDialog({
     required String title,
     required List<String> items,
@@ -395,7 +422,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
             return AlertDialog(
               title: Text(title),
-              content: SingleChildScrollView( // Usar SingleChildScrollView no conteúdo do dialog
+              content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -431,10 +458,9 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                       onChanged: (_) => setDialogState((){}),
                     ),
                     const SizedBox(height: 16),
-                    // AQUI: Usar SizedBox para dar uma altura fixa ao ListView
                     SizedBox(
                       height: 250,
-                      width: 300, // Largura máxima do conteúdo para evitar overflow
+                      width: 300,
                       child: ListView(
                         shrinkWrap: true,
                         children: visibleItems.map((item) {
@@ -480,10 +506,9 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     });
   }
 
-  // Diálogo genérico para outros filtros
   void _showMultiSelectDialog({
     required String title,
-    required List<String> options,
+    required Map<String, String> options,
     required List<String> selectedOptions,
     required Function(List<String>) onConfirm,
   }) {
@@ -496,19 +521,18 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
             return AlertDialog(
               title: Text(title),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: options.map((option) {
-                    final isSelected = tempSelected.contains(option);
+                child: ListBody(
+                  children: options.entries.map((entry) {
                     return CheckboxListTile(
-                      title: Text(option),
-                      value: isSelected,
-                      onChanged: (bool? value) {
+                      value: tempSelected.contains(entry.key),
+                      title: Text(entry.value),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (isChecked) {
                         setDialogState(() {
-                          if (value == true) {
-                            tempSelected.add(option);
+                          if (isChecked ?? false) {
+                            tempSelected.add(entry.key);
                           } else {
-                            tempSelected.remove(option);
+                            tempSelected.remove(entry.key);
                           }
                         });
                       },
@@ -516,24 +540,19 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                   }).toList(),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    onConfirm(tempSelected);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Confirmar'),
-                ),
+              actions: <Widget>[
+                TextButton(child: const Text('Cancelar'), onPressed: () => Navigator.of(context).pop()),
+                ElevatedButton(child: const Text('Confirmar'), onPressed: () => Navigator.of(context).pop(tempSelected)),
               ],
             );
           },
         );
       },
-    );
+    ).then((selected) {
+      if (selected != null) {
+        onConfirm(selected);
+      }
+    });
   }
 }
 
@@ -544,6 +563,7 @@ class MemberListItem extends StatelessWidget {
   final bool canEdit;
   final Map<String, String> situacoes;
   final List<String> allAnosContribuicao;
+  final ({String text, Color color}) Function() getContributionStatus;
 
   const MemberListItem({
     super.key,
@@ -553,44 +573,13 @@ class MemberListItem extends StatelessWidget {
     required this.canEdit,
     required this.situacoes,
     required this.allAnosContribuicao,
+    required this.getContributionStatus,
   });
-
-  ({String text, Color color}) _getContributionStatus() {
-    final bool isSocio = [3, 4].contains(membro.situacaoSEAE);
-    final bool shouldBeContributor = isSocio && (membro.situacaoSEAE == 4 || membro.listaContribuintes);
-
-    if (!shouldBeContributor) {
-      return (text: 'Não Contribuinte', color: Colors.blue);
-    }
-
-    final int currentYear = DateTime.now().year;
-
-    // Prioridade 1: Verifica se há alguma contribuição no ano atual.
-    final currentYearStr = currentYear.toString();
-    final currentYearData = membro.contribuicao[currentYearStr];
-    if (currentYearData is Map && currentYearData['meses'] is Map && (currentYearData['meses'] as Map).values.any((pago) => pago == true)) {
-      return (text: 'Contribuinte', color: Colors.green);
-    }
-
-    // Prioridade 2: Se não há contribuição no ano atual, verifica atrasos de anos passados.
-    final yearsBeforeCurrent = allAnosContribuicao.where((yearStr) => int.tryParse(yearStr)! < currentYear).toList();
-    for (final yearStr in yearsBeforeCurrent) {
-      final anoData = membro.contribuicao[yearStr];
-      // Se a contribuição para um ano anterior não foi quitada, está em atraso.
-      if (anoData is! Map || anoData['quitado'] == false) {
-        return (text: 'Contribuição em Atraso', color: Colors.orange);
-      }
-    }
-
-    // Prioridade 3: Se não há atrasos passados e nem contribuição no ano atual.
-    return (text: 'Contribuição em Atraso', color: Colors.orange);
-  }
-
 
   @override
   Widget build(BuildContext context) {
     final activities = membro.atividades.join(', ');
-    final contributionStatus = _getContributionStatus();
+    final contributionStatus = getContributionStatus();
     final situacaoNome = situacoes[membro.situacaoSEAE.toString()] ?? 'Não definida';
     final bool isMembroInativo = [5, 6, 7].contains(membro.situacaoSEAE);
     final mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -700,10 +689,13 @@ class MemberListItem extends StatelessWidget {
                   _buildDetailRow('Mediunidade Ostensiva:', membro.mediunidadeOstensiva ? 'Sim' : 'Não'),
                   const Divider(height: 20),
                   _buildSectionTitle('Contribuições'),
-                  if (allAnosContribuicao.isEmpty)
-                    const Text('Nenhum ano de contribuição configurado.')
+                  if (membro.contribuicao.keys.isEmpty)
+                    const Text('Nenhum ano de contribuição registrado.')
                   else
-                    ...allAnosContribuicao.map((year) {
+                    ...membro.contribuicao.keys.toList()
+                        .where((year) => allAnosContribuicao.contains(year))
+                        .toList()
+                        .map((year) {
                       final anoData = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
                       final isQuitado = anoData['quitado'] as bool? ?? false;
 
@@ -746,7 +738,7 @@ class MemberListItem extends StatelessWidget {
                           ],
                         ),
                       );
-                    }),
+                    }).toList(),
                 ],
               ),
             ),
@@ -783,9 +775,8 @@ class MemberListItem extends StatelessWidget {
   }
 }
 
-// Este é o MultiSelectDialog genérico que será usado para os filtros de Situação e Anos de Contribuição
 class MultiSelectDialog extends StatefulWidget {
-  final List<String> items;
+  final Map<String, String> items;
   final List<String> initialSelectedItems;
   final String title;
 
@@ -815,17 +806,17 @@ class _MultiSelectDialogState extends State<MultiSelectDialog> {
       title: Text(widget.title),
       content: SingleChildScrollView(
         child: ListBody(
-          children: widget.items.map((item) {
+          children: widget.items.entries.map((entry) {
             return CheckboxListTile(
-              value: _selectedItems.contains(item),
-              title: Text(item),
+              value: _selectedItems.contains(entry.key),
+              title: Text(entry.value),
               controlAffinity: ListTileControlAffinity.leading,
               onChanged: (isChecked) {
                 setState(() {
                   if (isChecked ?? false) {
-                    _selectedItems.add(item);
+                    _selectedItems.add(entry.key);
                   } else {
-                    _selectedItems.remove(item);
+                    _selectedItems.remove(entry.key);
                   }
                 });
               },

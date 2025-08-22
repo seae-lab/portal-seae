@@ -8,10 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:projetos/models/documento.dart';
 import 'package:projetos/services/cadastro_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
-
 import '../../../models/dados_pessoais.dart';
 import '../../../models/membro.dart';
 

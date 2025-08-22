@@ -19,6 +19,7 @@ import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
 import 'guards/role_guard.dart';
+import 'package:projetos/screens/secretaria/gestao_bases_page.dart';
 
 class AppModule extends Module {
   @override
@@ -41,35 +42,37 @@ class AppModule extends Module {
               guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_dashboard'])]),
           ChildRoute('/gestao_membros',
               child: (context) => const GestaoMembrosPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_membros'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_membros'])]),
           ChildRoute('/relatorios_membros',
               child: (context) => const RelatoriosMembrosPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/consulta_avancada',
               child: (context) => const ConsultaAvancadaPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/controle_contribuicoes',
               child: (context) => const ControleContribuicoesPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/socios_elegiveis',
               child: (context) => const SociosElegiveisPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/socios_promoviveis',
               child: (context) => const SociosPromoviveisPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/socios_votantes',
               child: (context) => const SociosVotantesPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/colaboradores_departamento',
               child: (context) => const ColaboradoresDepartamentoPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/proposta_social',
               child: (context) => const PropostaSocialPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
           ChildRoute('/termo_adesao',
               child: (context) => const TermoAdesaoPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria_relatorios'])]),
-
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/gestao_bases',
+              child: (context) => const GestaoBasesPage(),
+              guards: [RoleGuard(allowedRoles: ['admin'])]),
           ChildRoute('/dij',
               child: (context) => const DijPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'dij'])])
