@@ -34,6 +34,24 @@ class AuthService with ChangeNotifier {
     _authSubscription?.cancel();
     _authSubscription = _auth.authStateChanges().listen((user) async {
       if (user != null) {
+        // LÓGICA DE EXPIRAÇÃO DE SESSÃO MÁXIMA (7 dias)
+        final IdTokenResult? tokenResult = await user.getIdTokenResult(true);
+        final DateTime? authTime = tokenResult?.authTime;
+
+        if (authTime != null) {
+          final sessionDuration = DateTime.now().difference(authTime);
+          const maxSessionDuration = Duration(days: 7);
+
+          if (sessionDuration > maxSessionDuration) {
+            await signOut(); // Desloga se a sessão for muito antiga
+            if (!_initialAuthCheckCompleter.isCompleted) {
+              _initialAuthCheckCompleter.complete();
+            }
+            return; // Interrompe o processo para o usuário expirado
+          }
+        }
+        // FIM DA LÓGICA DE EXPIRAÇÃO
+
         await _fetchAndSetPermissions(user);
       } else {
         currentUserPermissions = null;
@@ -122,25 +140,21 @@ class AuthService with ChangeNotifier {
     return user != null ? await _fetchAndSetPermissions(user) : false;
   }
 
-  // MÉTODO ATUALIZADO
   String getInitialRouteForUser() {
     if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
       return '/login';
     }
-    // Primeiro, checa os papéis mais abrangentes
     if (currentUserPermissions!.hasRole('admin') || currentUserPermissions!.hasRole('secretaria')) {
       return '/home/dashboard';
     }
-    // Depois, checa qualquer um dos papéis do DIJ
     if (currentUserPermissions!.hasRole('dij') ||
         currentUserPermissions!.hasRole('dij_diretora') ||
         currentUserPermissions!.hasRole('dij_ciclo_1') ||
         currentUserPermissions!.hasRole('dij_ciclo_2') ||
         currentUserPermissions!.hasRole('dij_ciclo_3')) {
-      return '/home/dij'; // A página principal do DIJ é a porta de entrada
+      return '/home/dij';
     }
 
-    // Se não encontrar nenhuma rota principal, volta para o login.
     return '/login';
   }
 

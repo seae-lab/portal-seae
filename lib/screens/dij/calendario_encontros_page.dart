@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
@@ -22,6 +24,9 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
   final AuthService _authService = Modular.get<AuthService>();
 
   final CalendarController _calendarController = CalendarController();
+  DateTime? _selectedDate;
+  List<CalendarEventModel> _visibleMonthEvents = [];
+  List<CalendarEventModel> _allFilteredEvents = [];
 
   late final bool canEdit;
   String _selectedTagFilter = 'Todos';
@@ -33,6 +38,7 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
   void initState() {
     super.initState();
     canEdit = _authService.currentUserPermissions?.hasRole('admin') ?? false;
+    _selectedDate = DateTime.now();
   }
 
   void _onYearViewChanged(DateRangePickerViewChangedArgs args) {
@@ -41,6 +47,35 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
       _calendarController.displayDate = selectedMonth;
       setState(() {
         _isMonthView = true;
+      });
+    }
+  }
+
+  void _updateVisibleMonthEvents(List<DateTime> visibleDates) {
+    if (visibleDates.isEmpty) return;
+
+    final monthStart = visibleDates.first;
+    final monthEnd = visibleDates.last;
+
+    final newVisibleEvents = _allFilteredEvents.where((event) {
+      final eventStart = event.start;
+      final eventEnd = event.end;
+      return (eventStart.isAfter(monthStart) && eventStart.isBefore(monthEnd)) ||
+          (eventEnd.isAfter(monthStart) && eventEnd.isBefore(monthEnd)) ||
+          (eventStart.isBefore(monthStart) && eventEnd.isAfter(monthEnd)) ||
+          eventStart.isAtSameMomentAs(monthStart) ||
+          eventEnd.isAtSameMomentAs(monthEnd);
+    }).toList();
+
+    newVisibleEvents.sort((a, b) => a.start.compareTo(b.start));
+
+    if (!listEquals(_visibleMonthEvents, newVisibleEvents)) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if(mounted) {
+          setState(() {
+            _visibleMonthEvents = newVisibleEvents;
+          });
+        }
       });
     }
   }
@@ -117,40 +152,57 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
               .toList() ??
               [];
 
-          List<CalendarEventModel> filteredEvents;
           if (_selectedTagFilter == 'Todos') {
-            filteredEvents = allEvents;
+            _allFilteredEvents = allEvents;
           } else {
-            filteredEvents = allEvents
+            _allFilteredEvents = allEvents
                 .where((event) => event.tag == _selectedTagFilter)
                 .toList();
           }
 
           if (_isMonthView) {
-            return Listener(
-              onPointerSignal: (pointerSignal) {
-                if (pointerSignal is PointerScrollEvent) {
-                  if (pointerSignal.scrollDelta.dy > 0) {
-                    _calendarController.forward!();
-                  } else if (pointerSignal.scrollDelta.dy < 0) {
-                    _calendarController.backward!();
-                  }
-                }
-              },
-              child: SfCalendar(
-                controller: _calendarController,
-                dataSource: MeetingDataSource(filteredEvents),
-                view: CalendarView.month,
-                headerHeight: 50,
-                headerStyle: const CalendarHeaderStyle(
-                    textAlign: TextAlign.center,
-                    textStyle: TextStyle(fontSize: 20)),
-                monthViewSettings: const MonthViewSettings(
-                  showAgenda: true,
-                  agendaItemHeight: 50,
+            return Column(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Listener(
+                    onPointerSignal: (pointerSignal) {
+                      if (pointerSignal is PointerScrollEvent) {
+                        if (pointerSignal.scrollDelta.dy > 0) {
+                          _calendarController.forward!();
+                        } else if (pointerSignal.scrollDelta.dy < 0) {
+                          _calendarController.backward!();
+                        }
+                      }
+                    },
+                    child: SfCalendar(
+                      controller: _calendarController,
+                      dataSource: MeetingDataSource(_allFilteredEvents),
+                      view: CalendarView.month,
+                      headerHeight: 50,
+                      headerStyle: const CalendarHeaderStyle(
+                          textAlign: TextAlign.center,
+                          textStyle: TextStyle(fontSize: 20)),
+                      monthViewSettings: const MonthViewSettings(
+                        appointmentDisplayMode: MonthAppointmentDisplayMode.appointment,
+                        appointmentDisplayCount: 2,
+                      ),
+                      appointmentBuilder: _appointmentBuilder,
+                      onTap: canEdit ? _onCalendarTapped : null,
+                      onViewChanged: (details) => _updateVisibleMonthEvents(details.visibleDates),
+                    ),
+                  ),
                 ),
-                onTap: canEdit ? _onCalendarTapped : null,
-              ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text("Eventos do Mês", style: Theme.of(context).textTheme.titleMedium),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  flex: 2,
+                  child: _buildMonthAgenda(),
+                )
+              ],
             );
           } else {
             return SfDateRangePicker(
@@ -166,7 +218,7 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
       ),
       floatingActionButton: canEdit && _isMonthView
           ? FloatingActionButton(
-        onPressed: () => _showAddEventDialog(selectedDate: DateTime.now()),
+        onPressed: () => _showAddEventDialog(selectedDate: _selectedDate),
         tooltip: 'Adicionar Evento',
         backgroundColor: const Color.fromRGBO(45, 55, 131, 1),
         child: const Icon(Icons.add, color: Colors.white),
@@ -175,11 +227,63 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
     );
   }
 
+  Widget _buildMonthAgenda(){
+    if (_visibleMonthEvents.isEmpty) {
+      return const Center(child: Text("Nenhum evento neste mês."));
+    }
+
+    return ListView.builder(
+      itemCount: _visibleMonthEvents.length,
+      itemBuilder: (context, index) {
+        final event = _visibleMonthEvents[index];
+        return GestureDetector(
+          onTap: () => _showAddEventDialog(event: event), // MUDANÇA: Toque único para editar
+          child: Card(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: ListTile(
+              leading: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(DateFormat('dd').format(event.start), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text(DateFormat('MMM', 'pt_BR').format(event.start), style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              title: Text(event.title),
+              subtitle: Text('${DateFormat('HH:mm').format(event.start)} - ${DateFormat('HH:mm').format(event.end)}'),
+              tileColor: event.color.withOpacity(0.1),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _onCalendarTapped(CalendarTapDetails details) {
     if (details.targetElement == CalendarElement.appointment) {
       final CalendarEventModel event = details.appointments!.first;
       _showAddEventDialog(event: event);
+    } else if (details.targetElement == CalendarElement.calendarCell) {
+      setState(() {
+        _selectedDate = details.date;
+      });
     }
+  }
+
+  Widget _appointmentBuilder(BuildContext context, CalendarAppointmentDetails details) {
+    final event = details.appointments.first as CalendarEventModel;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: event.color,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        event.title,
+        style: const TextStyle(color: Colors.white, fontSize: 10),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
   }
 
   void _showAddEventDialog(
@@ -283,9 +387,8 @@ class _EventDialogState extends State<EventDialog> {
       _descriptionController = TextEditingController();
       final now = widget.selectedDate ?? DateTime.now();
 
-      // CORREÇÃO 2: Horário padrão para novos eventos
-      _startDate = DateTime(now.year, now.month, now.day, 18, 00); // Início às 18:00
-      _endDate = DateTime(now.year, now.month, now.day, 19, 30);   // Fim às 19:30
+      _startDate = DateTime(now.year, now.month, now.day, 18, 00);
+      _endDate = DateTime(now.year, now.month, now.day, 19, 30);
 
       _selectedColor = _colorOptions.first;
       _selectedTag = _cicloOptions.first;
@@ -299,7 +402,6 @@ class _EventDialogState extends State<EventDialog> {
     super.dispose();
   }
 
-  // CORREÇÃO 1: Funções separadas para selecionar data e hora
   Future<void> _selectDate(bool isStart) async {
     final DateTime initial = isStart ? _startDate : _endDate;
     final DateTime? pickedDate = await showDatePicker(
@@ -313,7 +415,6 @@ class _EventDialogState extends State<EventDialog> {
       setState(() {
         if (isStart) {
           _startDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, _startDate.hour, _startDate.minute);
-          // Opcional: ajustar data final se a inicial ultrapassá-la
           if (_endDate.isBefore(_startDate)) {
             _endDate = _startDate.add(const Duration(hours: 1, minutes: 30));
           }
@@ -389,7 +490,6 @@ class _EventDialogState extends State<EventDialog> {
               ),
               const SizedBox(height: 20),
 
-              // CORREÇÃO 1: Layout modificado para separar seleção de data e hora
               _buildDateTimePicker(label: 'Início', date: _startDate, isStart: true),
               _buildDateTimePicker(label: 'Fim', date: _endDate, isStart: false),
 
@@ -446,7 +546,6 @@ class _EventDialogState extends State<EventDialog> {
     );
   }
 
-  // CORREÇÃO 1: Widget auxiliar para criar os novos campos de data e hora
   Widget _buildDateTimePicker({required String label, required DateTime date, required bool isStart}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -458,7 +557,6 @@ class _EventDialogState extends State<EventDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Botão para Data
               InkWell(
                 onTap: () => _selectDate(isStart),
                 child: Container(
@@ -476,7 +574,6 @@ class _EventDialogState extends State<EventDialog> {
                   ),
                 ),
               ),
-              // Botão para Hora
               InkWell(
                 onTap: () => _selectTime(isStart),
                 child: Container(

@@ -8,7 +8,7 @@ class CalendarEventModel {
   final DateTime start;
   final DateTime end;
   final Color color;
-  final String tag; // NOVO: Campo para a tag do evento
+  final String tag;
 
   CalendarEventModel({
     this.id,
@@ -17,7 +17,7 @@ class CalendarEventModel {
     required this.start,
     required this.end,
     required this.color,
-    this.tag = 'Outros', // NOVO: Valor padrão para a tag
+    this.tag = 'Outros',
   });
 
   factory CalendarEventModel.fromFirestore(DocumentSnapshot snapshot) {
@@ -29,7 +29,7 @@ class CalendarEventModel {
       start: (data['start'] as Timestamp).toDate(),
       end: (data['end'] as Timestamp).toDate(),
       color: Color(data['color'] ?? Colors.blue.value),
-      tag: data['tag'] ?? 'Outros', // NOVO: Lendo a tag do Firestore
+      tag: data['tag'] ?? 'Outros',
     );
   }
 
@@ -40,7 +40,30 @@ class CalendarEventModel {
       'start': Timestamp.fromDate(start),
       'end': Timestamp.fromDate(end),
       'color': color.value,
-      'tag': tag, // NOVO: Salvando a tag no Firestore
+      'tag': tag,
     };
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          other is CalendarEventModel &&
+              runtimeType == other.runtimeType &&
+              id == other.id &&
+              title == other.title &&
+              description == other.description &&
+              start == other.start &&
+              end == other.end &&
+              color == other.color &&
+              tag == other.tag;
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      description.hashCode ^
+      start.hashCode ^
+      end.hashCode ^
+      color.hashCode ^
+      tag.hashCode;
 }
