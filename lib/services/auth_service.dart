@@ -1,4 +1,4 @@
-// lib/services/auth_service.dart
+// ARQUIVO COMPLETO: lib/services/auth_service.dart
 
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,6 +17,7 @@ class AuthService with ChangeNotifier {
         : null,
   );
 
+  User? get currentUser => _auth.currentUser;
   UserPermissions? currentUserPermissions;
   StreamSubscription? _authSubscription;
 
@@ -121,16 +122,25 @@ class AuthService with ChangeNotifier {
     return user != null ? await _fetchAndSetPermissions(user) : false;
   }
 
+  // MÉTODO ATUALIZADO
   String getInitialRouteForUser() {
     if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
       return '/login';
     }
+    // Primeiro, checa os papéis mais abrangentes
     if (currentUserPermissions!.hasRole('admin') || currentUserPermissions!.hasRole('secretaria')) {
       return '/home/dashboard';
     }
-    if (currentUserPermissions!.hasRole('dij')) {
-      return '/home/dij';
+    // Depois, checa qualquer um dos papéis do DIJ
+    if (currentUserPermissions!.hasRole('dij') ||
+        currentUserPermissions!.hasRole('dij_diretora') ||
+        currentUserPermissions!.hasRole('dij_ciclo_1') ||
+        currentUserPermissions!.hasRole('dij_ciclo_2') ||
+        currentUserPermissions!.hasRole('dij_ciclo_3')) {
+      return '/home/dij'; // A página principal do DIJ é a porta de entrada
     }
+
+    // Se não encontrar nenhuma rota principal, volta para o login.
     return '/login';
   }
 
