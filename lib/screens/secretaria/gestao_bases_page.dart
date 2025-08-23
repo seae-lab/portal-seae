@@ -157,7 +157,22 @@ class _PermissionsCardState extends State<PermissionsCard> {
     final emailController = TextEditingController(text: email);
     final formKey = GlobalKey<FormState>();
 
-    Map<String, dynamic> rolesState = isEditing ? Map<String, dynamic>.from(currentRoles!) : {};
+    // CORREÇÃO: Usar um mapa plano para o estado e preenchê-lo
+    final Map<String, bool> rolesState = {};
+    if (isEditing && currentRoles != null) {
+      currentRoles.forEach((key, value) {
+        if (value is bool) {
+          rolesState[key] = value;
+        } else if (value is Map) {
+          value.forEach((subKey, subValue) {
+            if (subValue is bool) {
+              rolesState[subKey] = subValue;
+            }
+          });
+        }
+      });
+    }
+
 
     if (!mounted) return;
     showDialog(
@@ -208,27 +223,18 @@ class _PermissionsCardState extends State<PermissionsCard> {
                         final mainRole = entry.key;
                         final subRoles = entry.value;
 
-                        if (rolesState[mainRole] is! Map) {
-                          rolesState[mainRole] = <String, bool>{};
-                        }
-                        final Map<String, dynamic> subRolesState = rolesState[mainRole];
-
                         return ExpansionTile(
                           title: Text(mainRole),
                           childrenPadding: const EdgeInsets.only(left: 16),
                           initiallyExpanded: true,
                           children: [
-                            CheckboxListTile(
-                              title: const Text('secretaria (acesso geral)', style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic)),
-                              value: subRolesState['secretaria'] == true,
-                              onChanged: (val) => setDialogState(() => subRolesState['secretaria'] = val!),
-                              dense: true,
-                            ),
-                            ...subRoles.where((r) => r != 'secretaria').map((subRole) {
+                            // CORREÇÃO: Mapeia apenas as sub-permissões corretas
+                            ...subRoles.map((subRole) {
                               return CheckboxListTile(
                                 title: Text(subRole, style: const TextStyle(fontSize: 14)),
-                                value: subRolesState[subRole] == true,
-                                onChanged: (val) => setDialogState(() => subRolesState[subRole] = val!),
+                                // CORREÇÃO: Lê e escreve no mapa plano
+                                value: rolesState[subRole] == true,
+                                onChanged: (val) => setDialogState(() => rolesState[subRole] = val!),
                                 dense: true,
                               );
                             })
@@ -247,9 +253,15 @@ class _PermissionsCardState extends State<PermissionsCard> {
                       final navigator = Navigator.of(context);
                       setState(() => _isLoading = true);
 
-                      rolesState.removeWhere((key, value) => value is Map && (value.values.every((v) => v == false || v == null)));
+                      // CORREÇÃO: Cria um novo mapa contendo apenas as permissões ativas (true)
+                      final rolesToSave = <String, bool>{};
+                      rolesState.forEach((key, value) {
+                        if (value == true) {
+                          rolesToSave[key] = true;
+                        }
+                      });
 
-                      await _cadastroService.savePermission(emailController.text, rolesState);
+                      await _cadastroService.savePermission(emailController.text, rolesToSave);
 
                       if(mounted){
                         setState(() => _isLoading = false);
@@ -278,6 +290,7 @@ class _PermissionsCardState extends State<PermissionsCard> {
             .map((e) => e.key)
             .toList();
         if (subRoles.isNotEmpty) {
+          // Apenas para exibição, podemos manter a lógica de agrupamento visual
           formattedRoles.add('$key (${subRoles.join(', ')})');
         }
       }

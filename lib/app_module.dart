@@ -1,4 +1,4 @@
-// ARQUIVO COMPLETO: lib/app_module.dart
+// ARQUIVO ATUALIZADO: lib/app_module.dart
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/auth/login_screen.dart';
 import 'package:projetos/screens/dij/calendario_encontros_page.dart';
@@ -22,9 +22,12 @@ import 'package:projetos/services/cadastro_service.dart';
 import 'guards/auth_guard.dart';
 import 'guards/role_guard.dart';
 import 'package:projetos/screens/secretaria/gestao_bases_page.dart';
-import 'package:projetos/screens/dij/gestao_jovens_dij_page.dart'; // Rota atualizada
+
+// NOVOS IMPORTS
+import 'package:projetos/screens/dij/gestao_jovens_dij_page.dart';
 import 'package:projetos/screens/dij/chamada_dij_page.dart';
 import 'package:projetos/services/dij_service.dart';
+
 
 class AppModule extends Module {
   @override
@@ -32,7 +35,7 @@ class AppModule extends Module {
     i.addSingleton(AuthService.new);
     i.addSingleton(CadastroService.new);
     i.addSingleton(CalendarService.new);
-    i.addSingleton(DijService.new);
+    i.addSingleton(DijService.new); // ADICIONADO O BIND DO SERVIÇO DIJ
   }
 
   @override
@@ -44,33 +47,56 @@ class AppModule extends Module {
         child: (context) => const HomeScreen(),
         guards: [AuthGuard()],
         children: [
-          // Rotas da Secretaria...
-          ChildRoute('/dashboard', child: (context) => const DashboardPage()),
-          ChildRoute('/gestao_membros', child: (context) => const GestaoMembrosPage()),
-          ChildRoute('/relatorios_membros', child: (context) => const RelatoriosMembrosPage()),
-          ChildRoute('/consulta_avancada', child: (context) => const ConsultaAvancadaPage()),
-          ChildRoute('/controle_contribuicoes', child: (context) => const ControleContribuicoesPage()),
-          ChildRoute('/socios_elegiveis', child: (context) => const SociosElegiveisPage()),
-          ChildRoute('/socios_promoviveis', child: (context) => const SociosPromoviveisPage()),
-          ChildRoute('/socios_votantes', child: (context) => const SociosVotantesPage()),
-          ChildRoute('/colaboradores_departamento', child: (context) => const ColaboradoresDepartamentoPage()),
-          ChildRoute('/proposta_social', child: (context) => const PropostaSocialPage()),
-          ChildRoute('/termo_adesao', child: (context) => const TermoAdesaoPage()),
-          ChildRoute('/gestao_bases', child: (context) => const GestaoBasesPage(), guards: [RoleGuard(allowedRoles: ['admin'])]),
+          ChildRoute('/dashboard',
+              child: (context) => const DashboardPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_dashboard'])]),
+          ChildRoute('/gestao_membros',
+              child: (context) => const GestaoMembrosPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_membros'])]),
+          ChildRoute('/relatorios_membros',
+              child: (context) => const RelatoriosMembrosPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/consulta_avancada',
+              child: (context) => const ConsultaAvancadaPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/controle_contribuicoes',
+              child: (context) => const ControleContribuicoesPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/socios_elegiveis',
+              child: (context) => const SociosElegiveisPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/socios_promoviveis',
+              child: (context) => const SociosPromoviveisPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/socios_votantes',
+              child: (context) => const SociosVotantesPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/colaboradores_departamento',
+              child: (context) => const ColaboradoresDepartamentoPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/proposta_social',
+              child: (context) => const PropostaSocialPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/termo_adesao',
+              child: (context) => const TermoAdesaoPage(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'secretaria', 'secretaria_relatorios'])]),
+          ChildRoute('/gestao_bases',
+              child: (context) => const GestaoBasesPage(),
+              guards: [RoleGuard(allowedRoles: ['admin'])]),
 
-          // Rotas do DIJ
+          // ---- NOVAS ROTAS DO DIJ ----
           ChildRoute('/dij',
               child: (context) => const DijPage(),
-              guards: [RoleGuard(allowedRoles: ['dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
-          ChildRoute('/dij/jovens', // CORRIGIDO AQUI
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+          ChildRoute('/dij/jovens',
               child: (context) => const GestaoJovensDijPage(),
-              guards: [RoleGuard(allowedRoles: ['dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
           ChildRoute('/dij/chamada',
               child: (context) => const ChamadaDijPage(),
-              guards: [RoleGuard(allowedRoles: ['dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
           ChildRoute('/dij/calendario',
               child: (context) => const CalendarioEncontrosPage(),
-              guards: [RoleGuard(allowedRoles: ['dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
         ]);
   }
 }
