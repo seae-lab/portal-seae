@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dados_pessoais.dart';
-import 'documento.dart'; // Importa o novo modelo
+import 'documento.dart';
 
 class Membro {
   String? id;
@@ -8,8 +8,8 @@ class Membro {
   String foto;
   List<String> atividades;
   bool atualizacao;
-  String atualizacaoCD;
-  String atualizacaoCF;
+  String atuacaoCD;
+  String atuacaoCF;
   Map<String, dynamic> contribuicao;
   DadosPessoais dadosPessoais;
   String dataAprovacaoCD;
@@ -31,8 +31,8 @@ class Membro {
     this.foto = '',
     List<String>? atividades,
     this.atualizacao = false,
-    this.atualizacaoCD = '',
-    this.atualizacaoCF = '',
+    this.atuacaoCD = '',
+    this.atuacaoCF = '',
     Map<String, dynamic>? contribuicao,
     required this.dadosPessoais,
     this.dataAprovacaoCD = '',
@@ -63,7 +63,6 @@ class Membro {
         final bool quitado = value['quitado'] ?? false;
         final mesesDoAno = Map<String, bool>.from(value['meses']?.cast<String, bool>() ?? {});
 
-        // Se o ano está quitado, todos os meses devem ser true.
         if (quitado) {
           for (var mes in meses) {
             mesesDoAno[mes] = true;
@@ -75,7 +74,7 @@ class Membro {
           'meses': mesesDoAno,
         };
 
-      } else if (value is bool) { // Caso o valor do ano seja apenas um booleano
+      } else if (value is bool) {
         contribuicaoMap[year] = {
           'quitado': value,
           'meses': { for (var m in meses) m: value },
@@ -89,8 +88,8 @@ class Membro {
       foto: data['foto'] ?? '',
       atividades: List<String>.from(data['atividade'] ?? []),
       atualizacao: data['atualizacao'] ?? false,
-      atualizacaoCD: data['atualizacao_CD'] ?? '',
-      atualizacaoCF: data['atualizacao_CF'] ?? '',
+      atuacaoCD: data['atuacao_CD'] ?? '',
+      atuacaoCF: data['atuacao_CF'] ?? '',
       contribuicao: contribuicaoMap,
       dadosPessoais: DadosPessoais.fromMap(data['dados_pessoais'] ?? {}),
       dataAprovacaoCD: data['data_aprovacao_CD'] ?? '',
@@ -117,8 +116,8 @@ class Membro {
       'foto': foto,
       'atividade': atividades,
       'atualizacao': atualizacao,
-      'atualizacao_CD': atualizacaoCD,
-      'atualizacao_CF': atualizacaoCF,
+      'atuacao_CD': atuacaoCD,
+      'atuacao_CF': atuacaoCF,
       'contribuicao': contribuicao,
       'dados_pessoais': dadosPessoais.toMap(),
       'data_aprovacao_CD': dataAprovacaoCD,
