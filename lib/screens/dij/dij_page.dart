@@ -1,4 +1,3 @@
-// ARQUIVO COMPLETO: lib/screens/dij/dij_page.dart
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -19,7 +18,8 @@ class _DijPageState extends State<DijPage> {
     'Primeiro Ciclo',
     'Segundo Ciclo',
     'Terceiro Ciclo',
-    'Grupo de Pais'
+    'Grupo de Pais',
+    'Pós Juventude'
   ];
 
   DateTime? _dataSelecionada;
@@ -30,7 +30,7 @@ class _DijPageState extends State<DijPage> {
     super.initState();
     _datasFuture = _dijService.getUltimasDatasDeChamada();
     _datasFuture!.then((datas) {
-      if (datas.isNotEmpty && mounted) { // Verificação 'mounted' adicionada
+      if (datas.isNotEmpty && mounted) {
         setState(() {
           _dataSelecionada = datas.first;
         });
@@ -124,6 +124,7 @@ class _DijPageState extends State<DijPage> {
                       alignment: BarChartAlignment.spaceAround,
                       barGroups: data.entries.map((entry) {
                         final index = _ciclos.indexOf(entry.key);
+                        if (index == -1) return null;
                         return BarChartGroupData(
                           x: index,
                           barRods: [
@@ -135,7 +136,7 @@ class _DijPageState extends State<DijPage> {
                             ),
                           ],
                         );
-                      }).toList(),
+                      }).whereType<BarChartGroupData>().toList(),
                       titlesData: FlTitlesData(
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
@@ -196,25 +197,30 @@ class _DijPageState extends State<DijPage> {
 
         final chamadasDoDia = snapshot.data ?? [];
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 1,
-          ),
-          itemCount: _ciclos.length,
-          itemBuilder: (context, index) {
-            final ciclo = _ciclos[index];
-            final chamada = chamadasDoDia.firstWhere(
-                  (c) => c.ciclo == ciclo,
-              orElse: () => ChamadaDij(id: '', ciclo: ciclo, data: _dataSelecionada!, responsavelNome: '', alunos: {}),
-            );
+        return LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 600;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isMobile ? 1 : 2,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: isMobile ? 1.0 : 1.0,
+                ),
+                itemCount: _ciclos.length,
+                itemBuilder: (context, index) {
+                  final ciclo = _ciclos[index];
+                  final chamada = chamadasDoDia.firstWhere(
+                        (c) => c.ciclo == ciclo,
+                    orElse: () => ChamadaDij(id: '', ciclo: ciclo, data: _dataSelecionada!, responsavelNome: '', alunos: {}),
+                  );
 
-            return _ChamadaCard(chamada: chamada);
-          },
+                  return _ChamadaCard(chamada: chamada);
+                },
+              );
+            }
         );
       },
     );
@@ -260,7 +266,7 @@ class _ChamadaCard extends StatelessWidget {
                   children: nomesOrdenados.map((nome) {
                     final isPresente = chamada.alunos[nome] ?? false;
                     return ListTile(
-                      title: Text(nome, style: const TextStyle(fontSize: 12)),
+                      title: Text(nome, style: const TextStyle(fontSize: 14)),
                       trailing: Checkbox(
                         value: isPresente,
                         onChanged: null,

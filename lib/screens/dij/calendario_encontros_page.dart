@@ -30,7 +30,7 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
 
   late final bool canEdit;
   String _selectedTagFilter = 'Todos';
-  final List<String> _tagOptions = ['Todos', '1º Ciclo', '2º Ciclo', '3º Ciclo', 'Outros'];
+  final List<String> _tagOptions = ['Todos', '1º Ciclo', '2º Ciclo', '3º Ciclo', 'Pós Juventude', 'Outros'];
 
   bool _isMonthView = true;
 
@@ -237,7 +237,7 @@ class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
       itemBuilder: (context, index) {
         final event = _visibleMonthEvents[index];
         return GestureDetector(
-          onTap: () => _showAddEventDialog(event: event), // MUDANÇA: Toque único para editar
+          onTap: () => _showAddEventDialog(event: event),
           child: Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
@@ -361,7 +361,7 @@ class _EventDialogState extends State<EventDialog> {
   late Color _selectedColor;
   late String _selectedTag;
 
-  final List<String> _cicloOptions = ['Todos', '1º Ciclo', '2º Ciclo', '3º Ciclo', 'Outros'];
+  final List<String> _cicloOptions = ['Todos', '1º Ciclo', '2º Ciclo', '3º Ciclo', 'Pós Juventude', 'Outros'];
   final List<Color> _colorOptions = [
     Colors.blue,
     Colors.red,

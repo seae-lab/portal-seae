@@ -1,4 +1,3 @@
-// ARQUIVO COMPLETO: lib/screens/dij/gestao_jovens_dij_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/models/jovem_dij_model.dart';
@@ -36,13 +35,14 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
     final permissions = _authService.currentUserPermissions;
     if (permissions == null) return;
 
-    if (permissions.hasRole('dij_diretora') || permissions.hasRole('admin')) {
-      _ciclosParaFiltro.addAll(['Primeiro Ciclo', 'Segundo Ciclo', 'Terceiro Ciclo', 'Grupo de Pais']);
+    if (permissions.hasRole('dij_diretora') || permissions.hasRole('admin') || permissions.hasRole('dij')) {
+      _ciclosParaFiltro.addAll(['Primeiro Ciclo', 'Segundo Ciclo', 'Terceiro Ciclo', 'Grupo de Pais', 'Pós Juventude']);
       _cicloFiltro = 'Todos';
     } else {
       if (permissions.hasRole('dij_ciclo_1')) _ciclosParaFiltro.add('Primeiro Ciclo');
       if (permissions.hasRole('dij_ciclo_2')) _ciclosParaFiltro.add('Segundo Ciclo');
       if (permissions.hasRole('dij_ciclo_3')) _ciclosParaFiltro.add('Terceiro Ciclo');
+      if (permissions.hasRole('dij_pos_juventude')) _ciclosParaFiltro.add('Pós Juventude');
 
       if(_ciclosParaFiltro.length == 2) {
         _ciclosParaFiltro.remove('Todos');

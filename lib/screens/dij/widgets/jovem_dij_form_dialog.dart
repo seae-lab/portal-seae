@@ -1,4 +1,3 @@
-// ARQUIVO COMPLETO: lib/screens/dij/widgets/jovem_dij_form_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
@@ -23,14 +22,12 @@ class _JovemDijFormDialogState extends State<JovemDijFormDialog> {
 
   final List<bool> _expansionPanelOpenState = [true, true, true];
 
-  // Controllers
   late TextEditingController _cepController;
   late TextEditingController _enderecoController;
   late TextEditingController _bairroController;
   late TextEditingController _cidadeController;
   late TextEditingController _ufController;
 
-  // Masks
   final _celularMask = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _dataMask = MaskTextInputFormatter(mask: '##/##/####', filter: {"#": RegExp(r'[0-9]')});
   final _cepMask = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
@@ -134,7 +131,7 @@ class _JovemDijFormDialogState extends State<JovemDijFormDialog> {
             DropdownButtonFormField<String>(
               value: _formData.ciclo,
               decoration: const InputDecoration(labelText: 'Ciclo'),
-              items: ['Primeiro Ciclo', 'Segundo Ciclo', 'Terceiro Ciclo', 'Grupo de Pais']
+              items: ['Primeiro Ciclo', 'Segundo Ciclo', 'Terceiro Ciclo', 'Grupo de Pais', 'Pós Juventude']
                   .map((ciclo) => DropdownMenuItem(value: ciclo, child: Text(ciclo)))
                   .toList(),
               onChanged: (v) => setState(() => _formData.ciclo = v!),

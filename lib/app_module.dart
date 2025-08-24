@@ -35,7 +35,7 @@ class AppModule extends Module {
     i.addSingleton(AuthService.new);
     i.addSingleton(CadastroService.new);
     i.addSingleton(CalendarService.new);
-    i.addSingleton(DijService.new); // ADICIONADO O BIND DO SERVIÇO DIJ
+    i.addSingleton(DijService.new);
   }
 
   @override
@@ -84,19 +84,19 @@ class AppModule extends Module {
               child: (context) => const GestaoBasesPage(),
               guards: [RoleGuard(allowedRoles: ['admin'])]),
 
-          // ---- NOVAS ROTAS DO DIJ ----
+          // ---- ROTAS DO DIJ ATUALIZADAS ----
           ChildRoute('/dij',
               child: (context) => const DijPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
           ChildRoute('/dij/jovens',
               child: (context) => const GestaoJovensDijPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
           ChildRoute('/dij/chamada',
               child: (context) => const ChamadaDijPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
           ChildRoute('/dij/calendario',
               child: (context) => const CalendarioEncontrosPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
         ]);
   }
 }

@@ -1,4 +1,3 @@
-// ARQUIVO COMPLETO: lib/screens/dij/chamada_dij_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:intl/intl.dart';
@@ -23,11 +22,11 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
     'Primeiro Ciclo',
     'Segundo Ciclo',
     'Terceiro Ciclo',
-    'Grupo de Pais'
+    'Grupo de Pais',
+    'Pós Juventude'
   ];
   List<String> _ciclosPermitidos = [];
 
-  // Mapa para guardar os nomes dos jovens carregados na lista
   final Map<String, String> _nomesJovens = {};
 
   @override
@@ -47,6 +46,7 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
       if (permissions.hasRole('dij_ciclo_1')) _ciclosPermitidos.add('Primeiro Ciclo');
       if (permissions.hasRole('dij_ciclo_2')) _ciclosPermitidos.add('Segundo Ciclo');
       if (permissions.hasRole('dij_ciclo_3')) _ciclosPermitidos.add('Terceiro Ciclo');
+      if (permissions.hasRole('dij_pos_juventude')) _ciclosPermitidos.add('Pós Juventude');
     }
 
     if (_ciclosPermitidos.isNotEmpty) {
@@ -71,7 +71,6 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
   Future<void> _handleSave(Map<String, bool> presencasFinais) async {
     if (_cicloSelecionado == null) return;
 
-    // Constrói o mapa final com os nomes dos jovens, não os IDs
     final Map<String, bool> dadosParaSalvar = {};
     presencasFinais.forEach((id, presente) {
       final nome = _nomesJovens[id] ?? 'Nome não encontrado';
@@ -106,7 +105,7 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
       _dijService.salvarChamada(
         data: _dataSelecionada,
         ciclo: _cicloSelecionado!,
-        presencas: dadosParaSalvar, // Salva o mapa com nomes
+        presencas: dadosParaSalvar,
       ).then((_) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Chamada para $_cicloSelecionado salva com sucesso!')),
@@ -190,7 +189,6 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
             }
 
             final jovens = snapshotAlunos.data!;
-            // Limpa e preenche o mapa de IDs para nomes
             _nomesJovens.clear();
             for (var jovem in jovens) {
               _nomesJovens[jovem.id!] = jovem.nome;
@@ -233,8 +231,6 @@ class _ChamadaListViewState extends State<_ChamadaListView> {
     super.initState();
     _presencas = {};
     for (var jovem in widget.jovens) {
-      // A chave para a presença inicial agora é o nome, não o ID.
-      // O mapa de presenças interno continua usando o ID para segurança.
       _presencas[jovem.id!] = widget.presencasIniciais[jovem.nome] ?? false;
     }
   }
