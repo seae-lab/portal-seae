@@ -218,6 +218,8 @@ class CadastroService {
     }
   }
 
+  // --- FUNÇÕES DE ATUALIZAÇÃO E EXCLUSÃO EM CASCATA CORRIGIDAS ---
+
   Future<void> updateDepartmentInMembers(String oldSigla, String newSigla) async {
     final batch = _firestore.batch();
     final snapshot = await membrosCollection.get();
@@ -228,7 +230,7 @@ class CadastroService {
       final newAtividades = membro.atividades.map((atividade) {
         if (atividade == oldSigla || atividade.startsWith('$oldSigla/')) {
           needsUpdate = true;
-          return atividade.replaceFirst(oldSigla, newSigla);
+          return newSigla + atividade.substring(oldSigla.length);
         }
         return atividade;
       }).toList();
@@ -247,7 +249,9 @@ class CadastroService {
     for (var doc in snapshot.docs) {
       final membro = Membro.fromFirestore(doc);
       final initialCount = membro.atividades.length;
-      final newAtividades = membro.atividades.where((atividade) => !atividade.startsWith(sigla)).toList();
+      final newAtividades = membro.atividades.where((atividade) {
+        return !(atividade == sigla || atividade.startsWith('$sigla/'));
+      }).toList();
 
       if (newAtividades.length < initialCount) {
         batch.update(doc.reference, {'atividade': newAtividades});
