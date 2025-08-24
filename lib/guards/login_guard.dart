@@ -1,5 +1,3 @@
-// lib/guards/login_guard.dart
-
 import 'dart:async';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/services/auth_service.dart';
@@ -12,8 +10,11 @@ class LoginGuard extends RouteGuard {
   Future<bool> canActivate(String path, ModularRoute route) async {
     final authService = Modular.get<AuthService>();
 
-    // Se o usuário NÃO está logado (não tem permissões carregadas), ele PODE acessar a tela de login.
-    if (authService.currentUserPermissions == null) {
+    // AGUARDA a verificação de auth ser concluída
+    await authService.initialAuthCheck;
+
+    // Se o usuário NÃO está logado, ele PODE acessar a tela de login.
+    if (!authService.isAuthenticated) {
       return true;
     }
 

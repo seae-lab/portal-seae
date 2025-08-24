@@ -2,22 +2,18 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/services/auth_service.dart';
 
 class AuthGuard extends RouteGuard {
-  AuthGuard() : super();
+  AuthGuard() : super(redirectTo: '/login');
 
   @override
   Future<bool> canActivate(String path, ModularRoute route) async {
     final authService = Modular.get<AuthService>();
-    final isAuthenticated = authService.isAuthenticated;
+    // AGUARDA a verificação de auth ser concluída antes de prosseguir
+    await authService.initialAuthCheck;
 
-    if (!isAuthenticated && path != '/') {
-      Modular.to.navigate('/');
-      return false;
-    } else if (isAuthenticated) {
-      // Se o usuário está autenticado, permite o acesso.
-      return true;
+    if (authService.isAuthenticated) {
+      return true; // Permite o acesso se autenticado
     }
 
-    // Se o usuário não está autenticado e está tentando acessar a rota de login ('/'), permite.
-    return true;
+    return false; // Bloqueia e redireciona para /login se não autenticado
   }
 }
