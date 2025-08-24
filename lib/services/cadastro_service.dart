@@ -1,5 +1,3 @@
-// lib/services/cadastro_service.dart
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -98,23 +96,15 @@ class CadastroService {
 
   Future<LatLng?> getCoordinatesFromBairro(String bairro) async {
     if (bairro.isEmpty) return null;
-
-    // Normaliza o nome do bairro para o formato do mapa local (minúsculo)
     final normalizedBairro = bairro.trim().toLowerCase();
-
-    // Tenta pegar do cache em memória
     if (_bairroCoordenadasCache.containsKey(normalizedBairro)) {
       return _bairroCoordenadasCache[normalizedBairro];
     }
-
-    // Tenta a base de dados local
     final LatLng? localCoords = BAIRROS_COORDENADAS[normalizedBairro];
     if (localCoords != null) {
       _bairroCoordenadasCache[normalizedBairro] = localCoords;
       return localCoords;
     }
-
-    // Se o bairro não estiver no cache nem no mapa local, retorna null.
     return null;
   }
 
@@ -226,5 +216,65 @@ class CadastroService {
         rethrow;
       }
     }
+  }
+
+  Future<void> updateDepartmentInMembers(String oldSigla, String newSigla) async {
+    final batch = _firestore.batch();
+    final snapshot = await membrosCollection.get();
+
+    for (var doc in snapshot.docs) {
+      final membro = Membro.fromFirestore(doc);
+      bool needsUpdate = false;
+      final newAtividades = membro.atividades.map((atividade) {
+        if (atividade == oldSigla || atividade.startsWith('$oldSigla/')) {
+          needsUpdate = true;
+          return atividade.replaceFirst(oldSigla, newSigla);
+        }
+        return atividade;
+      }).toList();
+
+      if (needsUpdate) {
+        batch.update(doc.reference, {'atividade': newAtividades});
+      }
+    }
+    await batch.commit();
+  }
+
+  Future<void> deleteDepartmentFromMembers(String sigla) async {
+    final batch = _firestore.batch();
+    final snapshot = await membrosCollection.get();
+
+    for (var doc in snapshot.docs) {
+      final membro = Membro.fromFirestore(doc);
+      final initialCount = membro.atividades.length;
+      final newAtividades = membro.atividades.where((atividade) => !atividade.startsWith(sigla)).toList();
+
+      if (newAtividades.length < initialCount) {
+        batch.update(doc.reference, {'atividade': newAtividades});
+      }
+    }
+    await batch.commit();
+  }
+
+  Future<void> updateMediunidadeInMembers(String oldValue, String newValue) async {
+    final batch = _firestore.batch();
+    final snapshot = await membrosCollection.where('tipos_mediunidade', arrayContains: oldValue).get();
+
+    for (var doc in snapshot.docs) {
+      final membro = Membro.fromFirestore(doc);
+      final newTipos = membro.tiposMediunidade.map((tipo) => tipo == oldValue ? newValue : tipo).toList();
+      batch.update(doc.reference, {'tipos_mediunidade': newTipos});
+    }
+    await batch.commit();
+  }
+
+  Future<void> deleteMediunidadeFromMembers(String value) async {
+    final batch = _firestore.batch();
+    final snapshot = await membrosCollection.where('tipos_mediunidade', arrayContains: value).get();
+
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {'tipos_mediunidade': FieldValue.arrayRemove([value])});
+    }
+    await batch.commit();
   }
 }

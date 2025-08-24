@@ -6,8 +6,23 @@ import 'package:projetos/services/cadastro_service.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
 
 // Main Page Widget
-class GestaoBasesPage extends StatelessWidget {
+class GestaoBasesPage extends StatefulWidget {
   const GestaoBasesPage({super.key});
+
+  @override
+  State<GestaoBasesPage> createState() => _GestaoBasesPageState();
+}
+
+class _GestaoBasesPageState extends State<GestaoBasesPage> {
+  bool _isProcessing = false;
+
+  void _setProcessing(bool isProcessing) {
+    if (mounted) {
+      setState(() {
+        _isProcessing = isProcessing;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,31 +30,54 @@ class GestaoBasesPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Gestão de Bases de Dados'),
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 1200;
-          return GridView.count(
-            crossAxisCount: isWide ? 2 : 1,
-            padding: const EdgeInsets.all(16),
-            childAspectRatio: isWide ? 1.3 : 1.2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: const [
-              PermissionsCard(),
-              DepartamentosCard(),
-              SituacoesCard(),
-              MediunidadeCard(),
-            ],
-          );
-        },
+      body: LoadingOverlay(
+        isLoading: _isProcessing,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 1200;
+            return GridView.count(
+              crossAxisCount: isWide ? 2 : 1,
+              padding: const EdgeInsets.all(16),
+              childAspectRatio: isWide ? 1.3 : 1.2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              children: [
+                PermissionsCard(setProcessing: _setProcessing),
+                DepartamentosCard(setProcessing: _setProcessing),
+                SituacoesCard(),
+                MediunidadeCard(setProcessing: _setProcessing),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 }
 
+// Helper function to show delete confirmation dialog
+Future<bool?> _showDeleteConfirmationDialog(BuildContext context, String itemName) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Confirmar Exclusão'),
+      content: Text('Tem certeza que deseja excluir "$itemName"? Essa ação será refletida em todos os membros.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+}
+
+
 // Permissions Card Widget
 class PermissionsCard extends StatefulWidget {
-  const PermissionsCard({super.key});
+  final Function(bool) setProcessing;
+  const PermissionsCard({super.key, required this.setProcessing});
 
   @override
   State<PermissionsCard> createState() => _PermissionsCardState();
@@ -47,89 +85,88 @@ class PermissionsCard extends StatefulWidget {
 
 class _PermissionsCardState extends State<PermissionsCard> {
   final CadastroService _cadastroService = Modular.get<CadastroService>();
-  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
-    return LoadingOverlay(
-      isLoading: _isLoading,
-      child: Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Permissões de Usuários', style: Theme.of(context).textTheme.titleLarge),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle, color: Colors.green),
-                    tooltip: 'Adicionar Permissão',
-                    onPressed: () => _showPermissionDialog(),
-                  ),
-                ],
-              ),
-              Expanded(
-                child: StreamBuilder<List<QueryDocumentSnapshot>>(
-                  stream: _cadastroService.getPermissions(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(child: Text('Nenhuma permissão encontrada.'));
-                    }
-
-                    final permissions = snapshot.data!
-                        .where((doc) => doc.id != 'jhoel.fiorese@seae.org.br' && doc.id != 'exemplos')
-                        .toList();
-
-                    return ListView.builder(
-                      itemCount: permissions.length,
-                      itemBuilder: (context, index) {
-                        final doc = permissions[index];
-                        final email = doc.id;
-                        final roles = Map<String, dynamic>.from(doc.data() as Map);
-                        final rolesString = _formatRoles(roles);
-
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            title: Text(email),
-                            subtitle: Text(rolesString.isEmpty ? 'Nenhum papel' : rolesString),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blue),
-                                  onPressed: () => _showPermissionDialog(email: email, currentRoles: roles),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _deleteEntry(
-                                      context: context,
-                                      itemName: email,
-                                      onConfirm: () async {
-                                        setState(() => _isLoading = true);
-                                        await _cadastroService.deletePermission(email);
-                                        if (mounted) {
-                                          setState(() => _isLoading = false);
-                                        }
-                                      }),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Permissões de Usuários', style: Theme.of(context).textTheme.titleLarge),
+                IconButton(
+                  icon: const Icon(Icons.add_circle, color: Colors.green),
+                  tooltip: 'Adicionar Permissão',
+                  onPressed: () => _showPermissionDialog(),
                 ),
+              ],
+            ),
+            Expanded(
+              child: StreamBuilder<List<QueryDocumentSnapshot>>(
+                stream: _cadastroService.getPermissions(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text('Nenhuma permissão encontrada.'));
+                  }
+
+                  final permissions = snapshot.data!
+                      .where((doc) => doc.id != 'jhoel.fiorese@seae.org.br' && doc.id != 'exemplos')
+                      .toList();
+
+                  return ListView.builder(
+                    itemCount: permissions.length,
+                    itemBuilder: (context, index) {
+                      final doc = permissions[index];
+                      final email = doc.id;
+                      final roles = Map<String, dynamic>.from(doc.data() as Map);
+                      final rolesString = _formatRoles(roles);
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          title: Text(email),
+                          subtitle: Text(rolesString.isEmpty ? 'Nenhum papel' : rolesString),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () => _showPermissionDialog(email: email, currentRoles: roles),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  final confirm = await _showDeleteConfirmationDialog(context, email);
+                                  if (confirm == true) {
+                                    widget.setProcessing(true);
+                                    try {
+                                      await _cadastroService.deletePermission(email);
+                                    } catch (e) {
+                                      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
+                                    } finally {
+                                      if(mounted) widget.setProcessing(false);
+                                    }
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -157,7 +194,6 @@ class _PermissionsCardState extends State<PermissionsCard> {
     final emailController = TextEditingController(text: email);
     final formKey = GlobalKey<FormState>();
 
-    // CORREÇÃO: Usar um mapa plano para o estado e preenchê-lo
     final Map<String, bool> rolesState = {};
     if (isEditing && currentRoles != null) {
       currentRoles.forEach((key, value) {
@@ -228,11 +264,9 @@ class _PermissionsCardState extends State<PermissionsCard> {
                           childrenPadding: const EdgeInsets.only(left: 16),
                           initiallyExpanded: true,
                           children: [
-                            // CORREÇÃO: Mapeia apenas as sub-permissões corretas
                             ...subRoles.map((subRole) {
                               return CheckboxListTile(
                                 title: Text(subRole, style: const TextStyle(fontSize: 14)),
-                                // CORREÇÃO: Lê e escreve no mapa plano
                                 value: rolesState[subRole] == true,
                                 onChanged: (val) => setDialogState(() => rolesState[subRole] = val!),
                                 dense: true,
@@ -251,9 +285,8 @@ class _PermissionsCardState extends State<PermissionsCard> {
                   onPressed: () async {
                     if (formKey.currentState?.validate() ?? true) {
                       final navigator = Navigator.of(context);
-                      setState(() => _isLoading = true);
+                      widget.setProcessing(true);
 
-                      // CORREÇÃO: Cria um novo mapa contendo apenas as permissões ativas (true)
                       final rolesToSave = <String, bool>{};
                       rolesState.forEach((key, value) {
                         if (value == true) {
@@ -264,7 +297,7 @@ class _PermissionsCardState extends State<PermissionsCard> {
                       await _cadastroService.savePermission(emailController.text, rolesToSave);
 
                       if(mounted){
-                        setState(() => _isLoading = false);
+                        widget.setProcessing(false);
                         navigator.pop();
                       }
                     }
@@ -290,7 +323,6 @@ class _PermissionsCardState extends State<PermissionsCard> {
             .map((e) => e.key)
             .toList();
         if (subRoles.isNotEmpty) {
-          // Apenas para exibição, podemos manter a lógica de agrupamento visual
           formattedRoles.add('$key (${subRoles.join(', ')})');
         }
       }
@@ -301,7 +333,8 @@ class _PermissionsCardState extends State<PermissionsCard> {
 
 // Departments Card Widget
 class DepartamentosCard extends StatefulWidget {
-  const DepartamentosCard({super.key});
+  final Function(bool) setProcessing;
+  const DepartamentosCard({super.key, required this.setProcessing});
 
   @override
   State<DepartamentosCard> createState() => _DepartamentosCardState();
@@ -370,15 +403,22 @@ class _DepartamentosCardState extends State<DepartamentosCard> {
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _deleteEntry(
-                                      context: context,
-                                      itemName: '$key: $value',
-                                      onConfirm: () async {
-                                        data.remove(key);
-                                        await _cadastroService.saveDepartamentosMap(data);
-                                        setState(() {}); // Força a reconstrução deste widget
-                                      },
-                                    ),
+                                    onPressed: () async {
+                                      final confirm = await _showDeleteConfirmationDialog(context, '$key: $value');
+                                      if (confirm == true) {
+                                        widget.setProcessing(true);
+                                        try {
+                                          await _cadastroService.deleteDepartmentFromMembers(key);
+                                          data.remove(key);
+                                          await _cadastroService.saveDepartamentosMap(data);
+                                          if (mounted) setState(() {});
+                                        } catch(e) {
+                                          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
+                                        } finally {
+                                          if(mounted) widget.setProcessing(false);
+                                        }
+                                      }
+                                    },
                                   ),
                                 ],
                               ),
@@ -429,14 +469,26 @@ class _DepartamentosCardState extends State<DepartamentosCard> {
             onPressed: () async {
               if (formKey.currentState!.validate()) {
                 final navigator = Navigator.of(context);
+                widget.setProcessing(true);
                 final currentData = await _cadastroService.getDepartamentosMap();
-                if(isEditing && oldKey != null && oldKey != keyController.text) {
-                  currentData.remove(oldKey);
+                final newKey = keyController.text;
+
+                try {
+                  if(isEditing && oldKey != null && oldKey != newKey) {
+                    await _cadastroService.updateDepartmentInMembers(oldKey, newKey);
+                    currentData.remove(oldKey);
+                  }
+                  currentData[newKey] = valueController.text;
+                  await _cadastroService.saveDepartamentosMap(currentData);
+                  if(mounted) setState(() {});
+                } catch (e) {
+                  if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+                } finally {
+                  if(mounted) {
+                    widget.setProcessing(false);
+                    navigator.pop();
+                  }
                 }
-                currentData[keyController.text] = valueController.text;
-                await _cadastroService.saveDepartamentosMap(currentData);
-                setState(() {});
-                navigator.pop();
               }
             },
             child: const Text('Salvar'),
@@ -523,15 +575,14 @@ class _SituacoesCardState extends State<SituacoesCard> {
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _deleteEntry(
-                                      context: context,
-                                      itemName: '$key: $value',
-                                      onConfirm: () async {
+                                    onPressed: () async {
+                                      final confirm = await _showDeleteConfirmationDialog(context, '$key: $value');
+                                      if (confirm == true) {
                                         data.remove(key);
                                         await _cadastroService.saveSituacoes(data);
                                         setState(() {});
-                                      },
-                                    ),
+                                      }
+                                    },
                                   ),
                                 ],
                               ),
@@ -635,7 +686,8 @@ class _SituacoesCardState extends State<SituacoesCard> {
 
 // Mediunidade Card Widget
 class MediunidadeCard extends StatefulWidget {
-  const MediunidadeCard({super.key});
+  final Function(bool) setProcessing;
+  const MediunidadeCard({super.key, required this.setProcessing});
 
   @override
   State<MediunidadeCard> createState() => _MediunidadeCardState();
@@ -690,19 +742,26 @@ class _MediunidadeCardState extends State<MediunidadeCard> {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit, color: Colors.blue),
-                                onPressed: () => _showAddOrEditMediunidadeDialog(isEditing: true, index: index, oldValue: item, currentList: mediunidades),
+                                onPressed: () => _showAddOrEditMediunidadeDialog(isEditing: true, oldValue: item),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => _deleteEntry(
-                                  context: context,
-                                  itemName: item,
-                                  onConfirm: () async {
-                                    mediunidades.removeAt(index);
-                                    await _cadastroService.saveTiposMediunidadeList(mediunidades);
-                                    setState(() {});
-                                  },
-                                ),
+                                onPressed: () async {
+                                  final confirm = await _showDeleteConfirmationDialog(context, item);
+                                  if (confirm == true) {
+                                    widget.setProcessing(true);
+                                    try {
+                                      await _cadastroService.deleteMediunidadeFromMembers(item);
+                                      mediunidades.remove(item);
+                                      await _cadastroService.saveTiposMediunidadeList(mediunidades);
+                                      if(mounted) setState(() {});
+                                    } catch (e) {
+                                      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
+                                    } finally {
+                                      if(mounted) widget.setProcessing(false);
+                                    }
+                                  }
+                                },
                               ),
                             ],
                           ),
@@ -719,7 +778,7 @@ class _MediunidadeCardState extends State<MediunidadeCard> {
     );
   }
 
-  void _showAddOrEditMediunidadeDialog({bool isEditing = false, int? index, String? oldValue, List<String>? currentList}) {
+  void _showAddOrEditMediunidadeDialog({bool isEditing = false, String? oldValue}) {
     final valueController = TextEditingController(text: oldValue);
     final formKey = GlobalKey<FormState>();
 
@@ -741,15 +800,34 @@ class _MediunidadeCardState extends State<MediunidadeCard> {
             onPressed: () async {
               if (formKey.currentState!.validate()) {
                 final navigator = Navigator.of(context);
-                final list = isEditing ? currentList! : await _cadastroService.getTiposMediunidade();
-                if(isEditing && index != null) {
-                  list[index] = valueController.text;
-                } else {
-                  list.add(valueController.text);
+                final newValue = valueController.text;
+                widget.setProcessing(true);
+
+                try {
+                  if(isEditing && oldValue != null && oldValue != newValue) {
+                    await _cadastroService.updateMediunidadeInMembers(oldValue, newValue);
+                  }
+
+                  final list = await _cadastroService.getTiposMediunidade();
+                  if(isEditing && oldValue != null){
+                    final index = list.indexOf(oldValue);
+                    if(index != -1){
+                      list[index] = newValue;
+                    }
+                  } else if (!isEditing) {
+                    list.add(newValue);
+                  }
+
+                  await _cadastroService.saveTiposMediunidadeList(list);
+                  if(mounted) setState(() {});
+                } catch(e) {
+                  if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+                } finally {
+                  if(mounted){
+                    widget.setProcessing(false);
+                    navigator.pop();
+                  }
                 }
-                await _cadastroService.saveTiposMediunidadeList(list);
-                setState(() {});
-                navigator.pop();
               }
             },
             child: const Text('Salvar'),
@@ -757,40 +835,5 @@ class _MediunidadeCardState extends State<MediunidadeCard> {
         ],
       ),
     );
-  }
-}
-
-// Funções Genéricas (movidas para fora das classes)
-Future<void> _deleteEntry({
-  required BuildContext context,
-  required String itemName,
-  required Future<void> Function() onConfirm,
-}) async {
-  final navigator = Navigator.of(context);
-  final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Confirmar Exclusão'),
-      content: Text('Tem certeza que deseja excluir "$itemName"?'),
-      actions: [
-        TextButton(onPressed: () => navigator.pop(false), child: const Text('Cancelar')),
-        TextButton(
-          onPressed: () => navigator.pop(true),
-          child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-        ),
-      ],
-    ),
-  );
-
-  if (confirm == true) {
-    try {
-      await onConfirm();
-    } catch (e) {
-      if(scaffoldMessenger.mounted){
-        scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
-      }
-    }
   }
 }
