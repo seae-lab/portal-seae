@@ -281,10 +281,12 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
       if (_activeColumns.contains('contribuicoes') && _selectedYear != null) {
         final contribuicaoAno = membro.contribuicao[_selectedYear] as Map<String, dynamic>? ?? {};
         final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+        final anoQuitado = contribuicaoAno['quitado'] as bool? ?? false;
 
         cells.addAll(mesesKeys.map((mesKey) {
+          final isPaid = (mesesData[mesKey] ?? false) || anoQuitado;
           return DataCell(Center(
-            child: Checkbox(value: mesesData[mesKey] ?? false, onChanged: null),
+            child: Checkbox(value: isPaid, onChanged: null),
           ));
         }));
       }
@@ -354,36 +356,45 @@ class _SociosElegiveisPageState extends State<SociosElegiveisPage> {
   }
 
   pw.Widget _buildContentTable(pw.Context context) {
-    final List<String> tableHeaders = _activeColumns
+    final List<String> headerStrings = _activeColumns
         .where((field) => field != 'contribuicoes')
         .map((field) => _availableFields[field] ?? 'N/A').toList();
 
     if (_activeColumns.contains('contribuicoes')) {
-      tableHeaders.addAll(mesesAbreviados);
+      headerStrings.addAll(mesesAbreviados);
     }
 
-    final List<List<String>> tableData = _membrosElegiveis.map((membro) {
-      final List<String> rowData = _activeColumns
+    final List<List<pw.Widget>> tableData = _membrosElegiveis.map((membro) {
+      List<pw.Widget> rowWidgets = _activeColumns
           .where((field) => field != 'contribuicoes')
-          .map((field) => _getCellValue(membro, field)).toList();
+          .map((field) => pw.Padding(padding: const pw.EdgeInsets.all(2), child: pw.Text(_getCellValue(membro, field), style: const pw.TextStyle(fontSize: 7))))
+          .toList();
 
       if (_activeColumns.contains('contribuicoes') && _selectedYear != null) {
         final contribuicaoAno = membro.contribuicao[_selectedYear] as Map<String, dynamic>? ?? {};
         final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+        final anoQuitado = contribuicaoAno['quitado'] ?? false;
+
         for (final mesKey in mesesKeys) {
-          rowData.add((mesesData[mesKey] ?? false) ? 'X' : '');
+          final isPaid = (mesesData[mesKey] ?? false) || anoQuitado;
+          rowWidgets.add(pw.Checkbox(value: isPaid, name: '${membro.id}_${mesKey}'));
         }
       }
-      return rowData;
+      return rowWidgets;
     }).toList();
 
-    return pw.TableHelper.fromTextArray(
-      headers: tableHeaders,
-      data: tableData,
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-      cellStyle: const pw.TextStyle(fontSize: 7),
+    return pw.Table(
       border: pw.TableBorder.all(),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          children: headerStrings.map((h) => pw.Padding(
+            padding: const pw.EdgeInsets.all(4),
+            child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7), textAlign: pw.TextAlign.center),
+          )).toList(),
+        ),
+        ...tableData.map((row) => pw.TableRow(children: row.map((cell) => pw.Center(child: cell)).toList())),
+      ],
     );
   }
 

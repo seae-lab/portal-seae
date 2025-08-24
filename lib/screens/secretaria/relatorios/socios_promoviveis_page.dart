@@ -1,5 +1,3 @@
-// lib/screens/secretaria/relatorios/socios_promoviveis_page.dart
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -93,6 +91,7 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
 
     for (final membro in todosMembros) {
       if (membro.situacaoSEAE != idSituacaoColaborador) continue;
+      // Regra: "mais de 12 meses" significa que precisamos checar 13 meses.
       if (_temContribuicaoIninterrupta(membro, mesesContribuicaoIninterrupta + 1)) {
         promoviveis.add(membro);
       }
@@ -107,17 +106,18 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
   bool _temContribuicaoIninterrupta(Membro membro, int totalMeses) {
     final hoje = DateTime.now();
     for (int i = 0; i < totalMeses; i++) {
-      final dataAlvo = DateTime(hoje.year, hoje.month - (i + 1), 1);
+      // Itera pelos meses anteriores, a partir do último mês fechado.
+      final dataAlvo = DateTime(hoje.year, hoje.month - i, 1);
       final ano = dataAlvo.year.toString();
       final mesNome = _meses[dataAlvo.month.toString().padLeft(2, '0')];
 
       final contribuicaoAno = membro.contribuicao[ano] as Map<String, dynamic>?;
       if (contribuicaoAno == null) return false;
 
-      if (contribuicaoAno['quitado'] == true) continue;
-
       final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>?;
-      if (mesesData == null || mesesData[mesNome] != true) return false;
+      if (mesesData == null || mesesData[mesNome] != true) {
+        return false;
+      }
     }
     return true;
   }
@@ -313,6 +313,22 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
     if(mounted) setState(() => _isGeneratingPdf = false);
   }
 
+  pw.Widget _buildPdfCheckbox(bool isChecked) {
+    const checkMarkSvg = '''
+    <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 5 L4 7 L8 3" stroke-width="1.5" stroke="black" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>''';
+
+    return pw.Container(
+      width: 12,
+      height: 12,
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.black, width: 0.75),
+      ),
+      child: isChecked ? pw.SvgImage(svg: checkMarkSvg) : pw.Container(),
+    );
+  }
+
   pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
     return pw.Container(
       alignment: pw.Alignment.center,
@@ -341,36 +357,49 @@ class _SociosPromoviveisPageState extends State<SociosPromoviveisPage> {
   }
 
   pw.Widget _buildContentTable(pw.Context context) {
-    final List<String> tableHeaders = _activeColumns
+    final List<String> headerStrings = _activeColumns
         .where((field) => field != 'contribuicoes')
         .map((field) => _availableFields[field] ?? 'N/A').toList();
 
     if (_activeColumns.contains('contribuicoes')) {
-      tableHeaders.addAll(mesesAbreviados);
+      headerStrings.addAll(mesesAbreviados);
     }
 
-    final List<List<String>> tableData = _membrosPromoviveis.map((membro) {
-      final List<String> rowData = _activeColumns
+    final List<pw.TableRow> tableRows = _membrosPromoviveis.map((membro) {
+      final List<pw.Widget> cells = _activeColumns
           .where((field) => field != 'contribuicoes')
-          .map((field) => _getCellValue(membro, field)).toList();
+          .map((field) => pw.Container(
+        alignment: pw.Alignment.centerLeft,
+        padding: const pw.EdgeInsets.all(3),
+        child: pw.Text(_getCellValue(membro, field), style: const pw.TextStyle(fontSize: 8)),
+      ))
+          .toList();
 
       if (_activeColumns.contains('contribuicoes') && _selectedYear != null) {
         final contribuicaoAno = membro.contribuicao[_selectedYear] as Map<String, dynamic>? ?? {};
         final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+
         for (final mesKey in mesesKeys) {
-          rowData.add((mesesData[mesKey] ?? false) ? 'X' : '');
+          final isPaid = mesesData[mesKey] ?? false;
+          cells.add(pw.Center(child: _buildPdfCheckbox(isPaid)));
         }
       }
-      return rowData;
+      return pw.TableRow(children: cells);
     }).toList();
 
-    return pw.TableHelper.fromTextArray(
-      headers: tableHeaders,
-      data: tableData,
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-      cellStyle: const pw.TextStyle(fontSize: 7),
-      border: pw.TableBorder.all(),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+    return pw.Table(
+      border: pw.TableBorder.all(width: 0.75, color: PdfColors.grey700),
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          children: headerStrings.map((h) => pw.Container(
+            padding: const pw.EdgeInsets.all(4),
+            alignment: pw.Alignment.center,
+            child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+          )).toList(),
+        ),
+        ...tableRows,
+      ],
     );
   }
 

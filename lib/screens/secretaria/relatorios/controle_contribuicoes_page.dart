@@ -1,17 +1,132 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:projetos/models/membro.dart';
 import 'package:projetos/services/cadastro_service.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-//NÃO TIRAR, universal_html não funciona aqui
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
-import '../../../models/membro.dart';
+
+// Função de nível superior para ser executada em um isolate separado
+Future<Uint8List> generatePdfInBackground(Map<String, dynamic> params) async {
+  final members = params['members'] as List<Membro>;
+  final selectedYear = params['selectedYear'] as String;
+  final activeMonths = params['activeMonths'] as Set<String>;
+  final meses = params['meses'] as List<String>;
+  final mesesKeys = params['mesesKeys'] as List<String>;
+  final logoBytes = params['logoBytes'] as Uint8List;
+  final fontBytes = params['fontBytes'] as ByteData;
+  final boldFontBytes = params['boldFontBytes'] as ByteData;
+  final now = params['now'] as String;
+
+  final pdf = pw.Document();
+  final ttf = pw.Font.ttf(fontBytes);
+  final boldTtf = pw.Font.ttf(boldFontBytes);
+  final image = pw.MemoryImage(logoBytes);
+
+  pw.Widget buildPdfCheckbox(bool isChecked) {
+    const checkMarkSvg = '''
+    <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 5 L4 7 L8 3" stroke-width="1.5" stroke="black" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>''';
+
+    return pw.Container(
+      width: 12,
+      height: 12,
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.black, width: 0.75),
+      ),
+      child: isChecked ? pw.SvgImage(svg: checkMarkSvg) : pw.Container(),
+    );
+  }
+
+  final List<String> headerStrings = ['Nome', 'Dados\nAtualizados', ...activeMonths.map((monthKey) => meses[mesesKeys.indexOf(monthKey)])];
+  final Map<int, pw.TableColumnWidth> columnWidths = {
+    0: const pw.FlexColumnWidth(3.5),
+    1: const pw.FlexColumnWidth(1),
+  };
+  for (int i = 0; i < activeMonths.length; i++) {
+    columnWidths[i + 2] = const pw.FlexColumnWidth(0.6);
+  }
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4.landscape,
+      theme: pw.ThemeData.withFont(base: ttf, bold: boldTtf),
+      header: (context) => pw.Container(
+        alignment: pw.Alignment.center,
+        margin: const pw.EdgeInsets.only(bottom: 20.0),
+        child: pw.Column(
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Image(image, width: 50, height: 50),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text('Controle de Contribuições Mensais - Ano: $selectedYear', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, font: boldTtf)),
+                    pw.SizedBox(height: 5),
+                    pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 8)),
+                  ],
+                ),
+                pw.SizedBox(width: 50),
+              ],
+            ),
+            pw.Divider(color: PdfColors.grey),
+          ],
+        ),
+      ),
+      build: (context) => [
+        pw.Table(
+          border: pw.TableBorder.all(width: 0.75, color: PdfColors.grey700),
+          columnWidths: columnWidths,
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              children: headerStrings.map((h) => pw.Container(
+                padding: const pw.EdgeInsets.all(4),
+                alignment: pw.Alignment.center,
+                child: pw.Text(h.replaceAll('\n', ' '), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+              )).toList(),
+            ),
+            ...members.map((membro) {
+              final contribuicaoAno = membro.contribuicao[selectedYear] as Map<String, dynamic>? ?? {};
+              final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
+
+              final List<pw.Widget> cells = [
+                pw.Container(
+                    alignment: pw.Alignment.centerLeft,
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                    child: pw.Text(membro.nome, style: const pw.TextStyle(fontSize: 8))
+                ),
+                pw.Center(child: buildPdfCheckbox(membro.atualizacao)),
+              ];
+              cells.addAll(activeMonths.map((monthKey) {
+                final isPaid = mesesData[monthKey] ?? false;
+                return pw.Center(child: buildPdfCheckbox(isPaid));
+              }));
+              return pw.TableRow(children: cells);
+            }),
+          ],
+        ),
+      ],
+      footer: (context) => pw.Container(
+        alignment: pw.Alignment.centerRight,
+        margin: const pw.EdgeInsets.only(top: 10.0),
+        child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+      ),
+    ),
+  );
+
+  return pdf.save();
+}
+
 
 class ControleContribuicoesPage extends StatefulWidget {
   const ControleContribuicoesPage({super.key});
@@ -28,15 +143,11 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   String? _error;
   bool _isGeneratingPdf = false;
 
-  // Estados dos filtros
   String? _selectedYear;
   List<String> _selectedStatusIds = [];
-
-  // Listas para os filtros
   List<String> _availableYears = [];
   Map<String, String> _situacoesMap = {};
 
-  // Colunas
   final List<String> mesesKeys = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   final List<String> meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   late final Set<String> _activeMonths = Set<String>.from(mesesKeys);
@@ -48,26 +159,15 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    setState(() => _isLoading = true);
     try {
       await _loadYears();
       await _loadSituacoes();
       await _loadAllMembers();
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Erro ao carregar dados: $e';
-        });
-      }
+      if (mounted) setState(() => _error = 'Erro ao carregar dados: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -75,17 +175,9 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     try {
       _situacoesMap = await _cadastroService.getSituacoes();
       final idSocioEfetivo = _situacoesMap.keys.firstWhere((k) => _situacoesMap[k] == 'Sócio Efetivo', orElse: () => '4');
-      if(mounted) {
-        setState(() {
-          _selectedStatusIds = [idSocioEfetivo]; // Define o padrão
-        });
-      }
+      if (mounted) setState(() => _selectedStatusIds = [idSocioEfetivo]);
     } catch (e) {
-      if(mounted) {
-        setState(() {
-          _error = 'Erro ao carregar as situações: $e';
-        });
-      }
+      if (mounted) setState(() => _error = 'Erro ao carregar as situações: $e');
     }
   }
 
@@ -99,11 +191,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Erro ao carregar membros: $e';
-        });
-      }
+      if (mounted) setState(() => _error = 'Erro ao carregar membros: $e');
     }
   }
 
@@ -112,16 +200,12 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
       final years = await _cadastroService.getAnosContribuicao();
       if (mounted) {
         setState(() {
-          _availableYears = years;
-          _selectedYear = _availableYears.isNotEmpty ? _availableYears.first : null;
+          _availableYears = years..sort((a, b) => b.compareTo(a));
+          _selectedYear = _availableYears.isNotEmpty ? _availableYears.first : DateTime.now().year.toString();
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Erro ao carregar anos: $e';
-        });
-      }
+      if (mounted) setState(() => _error = 'Erro ao carregar anos: $e');
     }
   }
 
@@ -129,54 +213,53 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     setState(() {
       _filteredMembers = _allMembers.where((membro) {
         final matchesStatus = _selectedStatusIds.isEmpty || _selectedStatusIds.contains(membro.situacaoSEAE.toString());
-        final hasSelectedYearData = _selectedYear == null || (membro.contribuicao[_selectedYear] as Map<String, dynamic>?) != null;
-        return matchesStatus && hasSelectedYearData;
+        return matchesStatus;
       }).toList();
-
       _filteredMembers.sort((a, b) => a.nome.compareTo(b.nome));
     });
   }
 
   Future<void> _gerarPdf() async {
     setState(() => _isGeneratingPdf = true);
-    final pdf = pw.Document();
-    final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
-    final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
-    final ttf = pw.Font.ttf(fontData);
-    final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
-    final boldTtf = pw.Font.ttf(boldFontData);
+    try {
+      final logoBytes = (await rootBundle.load('assets/images/logo_SEAE_azul.png')).buffer.asUint8List();
+      final fontBytes = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+      final boldFontBytes = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+      final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
 
-    final logoImage = await rootBundle.load('assets/images/logo_SEAE_azul.png');
-    final image = pw.MemoryImage(logoImage.buffer.asUint8List());
+      final params = {
+        'members': _filteredMembers,
+        'selectedYear': _selectedYear!,
+        'activeMonths': _activeMonths,
+        'meses': meses,
+        'mesesKeys': mesesKeys,
+        'logoBytes': logoBytes,
+        'fontBytes': fontBytes,
+        'boldFontBytes': boldFontBytes,
+        'now': now,
+      };
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        theme: pw.ThemeData.withFont(
-          base: ttf,
-          bold: boldTtf,
-        ),
-        header: (context) => _buildHeader(now, image, boldTtf),
-        build: (context) => [_buildContentTable(context)],
-        footer: (context) => _buildFooter(context),
-      ),
-    );
-    final bytes = await pdf.save();
-    if (kIsWeb) {
-      final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'application/pdf'));
-      final url = web.URL.createObjectURL(blob);
-      web.window.open(url, '_blank');
-      web.URL.revokeObjectURL(url);
-    } else {
-      await Printing.layoutPdf(onLayout: (format) async => bytes);
+      final bytes = await compute(generatePdfInBackground, params);
+
+      if (kIsWeb) {
+        final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'application/pdf'));
+        final url = web.URL.createObjectURL(blob);
+        web.window.open(url, '_blank');
+        web.URL.revokeObjectURL(url);
+      } else {
+        await Printing.layoutPdf(onLayout: (format) async => bytes);
+      }
+    } catch (e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF: $e')));
+    } finally {
+      if(mounted) setState(() => _isGeneratingPdf = false);
     }
-    setState(() => _isGeneratingPdf = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return LoadingOverlay( // Adicionado o LoadingOverlay
+    return LoadingOverlay(
       isLoading: _isLoading || _isGeneratingPdf,
       child: Scaffold(
         appBar: AppBar(
@@ -222,7 +305,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
                   border: OutlineInputBorder(),
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                initialValue: _selectedYear,
+                value: _selectedYear,
                 items: _availableYears.map((String year) {
                   return DropdownMenuItem<String>(
                     value: year,
@@ -346,7 +429,6 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
     );
   }
 
-  // Método para o diálogo multi-seleção
   void _showMultiSelectDialog({
     required String title,
     required List<String> options,
@@ -399,64 +481,6 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
           },
         );
       },
-    );
-  }
-
-  pw.Widget _buildHeader(String now, pw.MemoryImage logo, pw.Font font) {
-    return pw.Container(
-      alignment: pw.Alignment.center,
-      margin: const pw.EdgeInsets.only(bottom: 20.0),
-      child: pw.Column(
-        children: [
-          pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Image(logo, width: 50, height: 50),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
-                  children: [
-                    pw.Text('Controle de Contribuições Mensais', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, font: font)),
-                    pw.SizedBox(height: 5),
-                    pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 8)),
-                  ],
-                ),
-                pw.SizedBox(width: 50),
-              ]
-          ),
-          pw.Divider(color: PdfColors.grey),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildContentTable(pw.Context context) {
-    final year = _selectedYear ?? DateTime.now().year.toString();
-    final tableHeaders = ['Nome', 'Dados Atualizados', ..._activeMonths.map((monthKey) => meses[mesesKeys.indexOf(monthKey)])];
-    final tableData = _filteredMembers.map((membro) {
-      final contribuicaoAno = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
-      final mesesData = contribuicaoAno['meses'] as Map<String, dynamic>? ?? {};
-      return [
-        membro.nome,
-        membro.atualizacao ? 'Sim' : 'Não',
-        ..._activeMonths.map((monthKey) => (mesesData[monthKey] ?? false) ? 'Sim' : 'Não'),
-      ];
-    }).toList();
-
-    return pw.TableHelper.fromTextArray(
-      headers: tableHeaders,
-      data: tableData,
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-      cellStyle: const pw.TextStyle(fontSize: 8),
-      border: pw.TableBorder.all(),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-    );
-  }
-
-  pw.Widget _buildFooter(pw.Context context) {
-    return pw.Container(
-      alignment: pw.Alignment.centerRight,
-      margin: const pw.EdgeInsets.only(top: 10.0),
-      child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
     );
   }
 }

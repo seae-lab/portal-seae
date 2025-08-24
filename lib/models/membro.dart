@@ -63,10 +63,9 @@ class Membro {
         final bool quitado = value['quitado'] ?? false;
         final mesesDoAno = Map<String, bool>.from(value['meses']?.cast<String, bool>() ?? {});
 
-        if (quitado) {
-          for (var mes in meses) {
-            mesesDoAno[mes] = true;
-          }
+        // Garante que o mapa de meses exista para evitar erros.
+        for (var mes in meses) {
+          mesesDoAno.putIfAbsent(mes, () => false);
         }
 
         contribuicaoMap[year] = {
@@ -74,7 +73,7 @@ class Membro {
           'meses': mesesDoAno,
         };
 
-      } else if (value is bool) {
+      } else if (value is bool) { // Lida com o formato antigo de dados
         contribuicaoMap[year] = {
           'quitado': value,
           'meses': { for (var m in meses) m: value },
