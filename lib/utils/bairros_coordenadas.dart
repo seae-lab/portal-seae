@@ -38,4 +38,5 @@ const Map<String, LatLng> BAIRROS_COORDENADAS = {
   'grande colorado (sobradinho)': LatLng(-15.664299, -47.836529),
   'park way': LatLng(-15.890542, -47.961432),
   'setor habitacional vicente pires': LatLng(-15.797497, -48.042697),
+  'setor militar urbano': LatLng(-15.776724, -47.925666),
 };
