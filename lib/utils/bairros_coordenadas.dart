@@ -39,4 +39,5 @@ const Map<String, LatLng> BAIRROS_COORDENADAS = {
   'park way': LatLng(-15.890542, -47.961432),
   'setor habitacional vicente pires': LatLng(-15.797497, -48.042697),
   'setor militar urbano': LatLng(-15.776724, -47.925666),
+  'zona industrial (guará)': LatLng(-15.784160, -47.985731),
 };
