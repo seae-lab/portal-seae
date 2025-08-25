@@ -32,17 +32,16 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchTerm = '';
 
-  List<String> _selectedStatus = []; // Unifica filtros de situação e contribuição
+  List<String> _selectedStatus = [];
   List<String> _selectedDepartments = [];
   List<String> _selectedContributionYears = [];
   Future<_PageDependencies>? _dependenciesFuture;
   bool _isLoading = true;
 
-  // Chaves especiais para os filtros de status de contribuição
   static const String _emAtrasoKey = 'status_contribuicao_em_atraso';
   static const String _contribuinteKey = 'status_contribuicao_contribuinte';
   static const String _naoContribuinteKey = 'status_contribuicao_nao_contribuinte';
-
+  static const String _naoDefinidaKey = 'status_nao_definida';
 
   @override
   void initState() {
@@ -102,7 +101,6 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     final currentYearData = membro.contribuicao[currentYearStr];
 
     if (currentYearData is Map) {
-      // 1. Se "Ano Quitado" estiver marcado, é Contribuinte.
       if (currentYearData['quitado'] == true) {
         return (text: 'Contribuinte', color: Colors.green);
       }
@@ -110,18 +108,15 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       final mesesData = currentYearData['meses'] as Map<String, dynamic>?;
 
       if (mesesData != null) {
-        // 2. Se o mês atual estiver pago, é Contribuinte.
         if (mesesData[currentMonthStr] == true) {
           return (text: 'Contribuinte', color: Colors.green);
         }
 
-        // 3. Se não, mas qualquer outro mês estiver pago, está em atraso.
         if (mesesData.values.any((pago) => pago == true)) {
           return (text: 'Contribuição em Atraso', color: Colors.orange);
         }
       }
     }
-    // 4. Se não houver dados de contribuição para o ano, ou nenhum mês pago.
     return (text: 'Contribuição em Atraso', color: Colors.orange);
   }
 
@@ -244,23 +239,12 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                             membro.dadosPessoais.cpf.toLowerCase().contains(_searchTerm.toLowerCase()) ||
                             membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase());
 
-                        final statusIds = _selectedStatus.where((s) => !s.startsWith('status_contribuicao')).toList();
-                        final contributionStatusFilters = _selectedStatus.where((s) => s.startsWith('status_contribuicao')).toList();
-
-                        final memberStatus = _getContributionStatusForMember(membro);
-                        bool matchesContributionStatus = contributionStatusFilters.isEmpty ||
-                            (contributionStatusFilters.contains(_emAtrasoKey) && memberStatus.text == 'Contribuição em Atraso') ||
-                            (contributionStatusFilters.contains(_contribuinteKey) && memberStatus.text == 'Contribuinte') ||
-                            (contributionStatusFilters.contains(_naoContribuinteKey) && memberStatus.text == 'Não Contribuinte');
-
-                        final matchesStatus = statusIds.isEmpty || statusIds.contains(membro.situacaoSEAE.toString());
-
                         final matchesDepartment = _selectedDepartments.isEmpty ||
-                            _selectedDepartments.any((selectedDepto) =>
+                            _selectedDepartments.every((selectedDepto) =>
                                 membro.atividades.any((depto) => depto.startsWith(selectedDepto)));
 
                         final matchesContributionYear = _selectedContributionYears.isEmpty ||
-                            _selectedContributionYears.any((year) {
+                            _selectedContributionYears.every((year) {
                               final contribuicaoAno = membro.contribuicao[year];
                               if (contribuicaoAno is Map) {
                                 if (contribuicaoAno['quitado'] == true) return true;
@@ -270,7 +254,31 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                               return false;
                             });
 
-                        return matchesSearchTerm && (matchesStatus && matchesContributionStatus) && matchesDepartment && matchesContributionYear;
+                        bool statusCheck() {
+                          if (_selectedStatus.isEmpty) return true;
+
+                          for (final status in _selectedStatus) {
+                            if (status.startsWith('status_contribuicao')) {
+                              final memberStatus = _getContributionStatusForMember(membro);
+                              if ((status == _emAtrasoKey && memberStatus.text == 'Contribuição em Atraso') ||
+                                  (status == _contribuinteKey && memberStatus.text == 'Contribuinte') ||
+                                  (status == _naoContribuinteKey && memberStatus.text == 'Não Contribuinte')) {
+                                return true;
+                              }
+                            } else if (status == _naoDefinidaKey) {
+                              if (membro.situacaoSEAE == 0 || !dependencies.situacoes.containsKey(membro.situacaoSEAE.toString())) {
+                                return true;
+                              }
+                            } else {
+                              if (membro.situacaoSEAE.toString() == status) {
+                                return true;
+                              }
+                            }
+                          }
+                          return false;
+                        }
+
+                        return matchesSearchTerm && statusCheck() && matchesDepartment && matchesContributionYear;
                       }).toList();
 
                       filteredMembers.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
@@ -346,6 +354,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   Widget _buildStatusFilter(Map<String, String> situacoes) {
     final Map<String, String> allStatusOptions = {
       ...situacoes,
+      _naoDefinidaKey: 'Não definida',
       _contribuinteKey: 'Contribuinte',
       _emAtrasoKey: 'Contribuição em Atraso',
       _naoContribuinteKey: 'Não Contribuinte',
