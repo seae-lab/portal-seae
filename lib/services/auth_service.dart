@@ -145,8 +145,15 @@ class AuthService with ChangeNotifier {
       return '/login';
     }
     if (currentUserPermissions!.hasRole('admin') ||
-        currentUserPermissions!.hasRole('secretaria')) {
+        currentUserPermissions!.hasRole('secretaria') ||
+        currentUserPermissions!.hasRole('secretaria_dashboard')) {
       return '/home/dashboard';
+    }
+    if(currentUserPermissions!.hasRole('secretaria_membros')) {
+      return '/home/gestao_membros';
+    }
+    if(currentUserPermissions!.hasRole('secretaria_relatorios')) {
+      return '/home/relatorios_membros';
     }
     if (currentUserPermissions!.hasRole('dij') ||
         currentUserPermissions!.hasRole('dij_diretora') ||
