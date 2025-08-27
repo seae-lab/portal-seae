@@ -1,23 +1,28 @@
-// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/gestao_dij_page.dart
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/gestao_jovens_dij_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/models/jovem_dij_model.dart';
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/dij_service.dart';
 import 'package:projetos/screens/dij/widgets/jovem_dij_form_dialog.dart';
-import 'package:projetos/screens/dij/widgets/responsavel_dij_form_dialog.dart'; // Importe o novo formulário
+// Certifique-se de que o formulário do responsável exista neste caminho
+import 'package:projetos/screens/dij/widgets/responsavel_dij_form_dialog.dart';
 
-class GestaoDijPageState extends StatefulWidget {
-  const GestaoDijPageState({super.key});
+class GestaoDijPage extends StatefulWidget {
+  const GestaoDijPage({super.key});
 
   @override
-  State<GestaoDijPageState> createState() => _GestaoDijPageState();
+  State<GestaoDijPage> createState() => _GestaoDijPage();
 }
 
-class _GestaoDijPageState extends State<GestaoDijPageState> {
+class _GestaoDijPage extends State<GestaoDijPage> {
   final AuthService _authService = Modular.get<AuthService>();
   final DijService _dijService = Modular.get<DijService>();
   final TextEditingController _searchController = TextEditingController();
+
+  // Chave para localizar o botão na tela e posicionar o menu
+  final GlobalKey _fabKey = GlobalKey();
+  bool _canChooseCadastroType = false;
 
   String _searchTerm = '';
   String? _cicloFiltro;
@@ -28,9 +33,22 @@ class _GestaoDijPageState extends State<GestaoDijPageState> {
   void initState() {
     super.initState();
     _definirFiltroInicial();
+    _checkPermissionsForCadastro();
     _searchController.addListener(() {
       setState(() => _searchTerm = _searchController.text);
     });
+  }
+
+  void _checkPermissionsForCadastro() {
+    final permissions = _authService.currentUserPermissions;
+    if (permissions != null &&
+        (permissions.hasRole('dij_diretora') ||
+            permissions.hasRole('dij') ||
+            permissions.hasRole('admin'))) {
+      setState(() {
+        _canChooseCadastroType = true;
+      });
+    }
   }
 
   void _definirFiltroInicial() {
@@ -45,7 +63,7 @@ class _GestaoDijPageState extends State<GestaoDijPageState> {
       if (permissions.hasRole('dij_ciclo_2')) _ciclosParaFiltro.add('Segundo Ciclo');
       if (permissions.hasRole('dij_ciclo_3')) _ciclosParaFiltro.add('Terceiro Ciclo');
       if (permissions.hasRole('dij_pos_juventude')) _ciclosParaFiltro.add('Pós Juventude');
-      if (permissions.hasRole('dij_grupo_pais')) _ciclosParaFiltro.add('Grupo de Pais'); // Corrigido
+      if (permissions.hasRole('dij_grupo_pais')) _ciclosParaFiltro.add('Grupo de Pais');
 
       if(_ciclosParaFiltro.length == 2) {
         _ciclosParaFiltro.remove('Todos');
@@ -54,37 +72,91 @@ class _GestaoDijPageState extends State<GestaoDijPageState> {
     }
   }
 
-  void _abrirFormulario([JovemDij? jovem]) {
-    final bool isGrupoDePais = jovem?.ciclo == 'Grupo de Pais' || _cicloFiltro == 'Grupo de Pais';
+  void _handleSave(JovemDij jovemSalvo) {
+    if (jovemSalvo.id != null) {
+      _dijService.updateJovens(jovemSalvo);
+    } else {
+      _dijService.addJovens(jovemSalvo);
+    }
+    Navigator.of(context).pop();
+  }
 
+  void _abrirFormularioJovem() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: JovemDijFormDialog(
+          onSave: _handleSave,
+        ),
+      ),
+    );
+  }
+
+  void _abrirFormularioResponsavel() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: ResponsavelDijFormDialog(
+          onSave: _handleSave,
+        ),
+      ),
+    );
+  }
+
+  void _abrirFormularioParaAdicionar() {
+    final bool isGrupoDePais = _cicloFiltro == 'Grupo de Pais';
     showDialog(
       context: context,
       builder: (context) => Dialog.fullscreen(
         child: isGrupoDePais
-            ? ResponsavelDijFormDialog(
-          jovem: jovem,
-          onSave: (jovemSalvo) {
-            if (jovemSalvo.id != null) {
-              _dijService.updateJovens(jovemSalvo);
-            } else {
-              _dijService.addJovens(jovemSalvo);
-            }
-            Navigator.of(context).pop();
-          },
-        )
-            : JovemDijFormDialog(
-          jovem: jovem,
-          onSave: (jovemSalvo) {
-            if (jovemSalvo.id != null) {
-              _dijService.updateJovens(jovemSalvo);
-            } else {
-              _dijService.addJovens(jovemSalvo);
-            }
-            Navigator.of(context).pop();
-          },
-        ),
+            ? ResponsavelDijFormDialog(onSave: _handleSave)
+            : JovemDijFormDialog(onSave: _handleSave),
       ),
     );
+  }
+
+  void _abrirFormularioParaEditar(JovemDij jovem) {
+    final bool isGrupoDePais = jovem.ciclo == 'Grupo de Pais';
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: isGrupoDePais
+            ? ResponsavelDijFormDialog(jovem: jovem, onSave: _handleSave)
+            : JovemDijFormDialog(jovem: jovem, onSave: _handleSave),
+      ),
+    );
+  }
+
+  void _showCadastroOptions() {
+    final RenderBox fabRenderBox = _fabKey.currentContext!.findRenderObject() as RenderBox;
+    final fabSize = fabRenderBox.size;
+    final fabPosition = fabRenderBox.localToGlobal(Offset.zero);
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        fabPosition.dx,
+        fabPosition.dy - 100, // Posiciona o menu acima do botão
+        fabPosition.dx + fabSize.width,
+        fabPosition.dy,
+      ),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'jovem',
+          child: Text('Cadastrar Jovem'),
+        ),
+        const PopupMenuItem<String>(
+          value: 'responsavel',
+          child: Text('Cadastrar Responsável'),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'jovem') {
+        _abrirFormularioJovem();
+      } else if (value == 'responsavel') {
+        _abrirFormularioResponsavel();
+      }
+    });
   }
 
   void _confirmarExclusao(JovemDij jovem) {
@@ -179,7 +251,7 @@ class _GestaoDijPageState extends State<GestaoDijPageState> {
                     final jovem = jovens[index];
                     return JovemListItem(
                       jovem: jovem,
-                      onEdit: () => _abrirFormulario(jovem),
+                      onEdit: () => _abrirFormularioParaEditar(jovem),
                       onDelete: () => _confirmarExclusao(jovem),
                     );
                   },
@@ -190,8 +262,15 @@ class _GestaoDijPageState extends State<GestaoDijPageState> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _abrirFormulario(),
-        tooltip: 'Adicionar cadastro',
+        key: _fabKey,
+        onPressed: () {
+          if (_canChooseCadastroType) {
+            _showCadastroOptions();
+          } else {
+            _abrirFormularioParaAdicionar();
+          }
+        },
+        tooltip: 'Adicionar',
         backgroundColor: const Color.fromRGBO(45, 55, 131, 1),
         child: const Icon(Icons.add, color: Colors.white),
       ),

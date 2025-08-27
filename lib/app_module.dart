@@ -86,7 +86,7 @@ class AppModule extends Module {
               child: (context) => const DijPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_grupo_pais', 'dij_pos_juventude'])]),
           ChildRoute('/dij/jovens',
-              child: (context) => const GestaoDijPageState(),
+              child: (context) => const GestaoDijPage(),
               guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_grupo_pais', 'dij_pos_juventude'])]),
           ChildRoute('/dij/chamada',
               child: (context) => const ChamadaDijPage(),
