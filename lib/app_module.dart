@@ -1,4 +1,4 @@
-// ARQUIVO ATUALIZADO: lib/app_module.dart
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/app_module.dart
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/screens/auth/login_screen.dart';
 import 'package:projetos/screens/dij/calendario_encontros_page.dart';
@@ -17,13 +17,11 @@ import 'package:projetos/screens/secretaria/relatorios/socios_elegiveis_page.dar
 import 'package:projetos/screens/secretaria/relatorios/socios_votantes_page.dart';
 import 'package:projetos/screens/splash_screen.dart';
 import 'package:projetos/services/auth_service.dart';
-import 'package:projetos/services/calendar_service.dart';
-import 'package:projetos/services/cadastro_service.dart';
+// ATUALIZADO: Import do novo nome de arquivo
+import 'package:projetos/services/secretaria_service.dart';
 import 'guards/auth_guard.dart';
 import 'guards/role_guard.dart';
 import 'package:projetos/screens/secretaria/gestao_bases_page.dart';
-
-// NOVOS IMPORTS
 import 'package:projetos/screens/dij/gestao_jovens_dij_page.dart';
 import 'package:projetos/screens/dij/chamada_dij_page.dart';
 import 'package:projetos/services/dij_service.dart';
@@ -34,7 +32,6 @@ class AppModule extends Module {
   void binds(i) {
     i.addSingleton(AuthService.new);
     i.addSingleton(CadastroService.new);
-    i.addSingleton(CalendarService.new);
     i.addSingleton(DijService.new);
   }
 

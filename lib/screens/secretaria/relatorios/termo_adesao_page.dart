@@ -6,7 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:projetos/models/membro.dart';
-import 'package:projetos/services/cadastro_service.dart';
+import 'package:projetos/services/secretaria_service.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
 import 'package:flutter/services.dart';
 

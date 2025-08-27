@@ -1,10 +1,11 @@
+// Conteúdo atualizado de dashboard_page.dart
 // lib/screens/home/pages/secretaria/dashboard_page.dart
 
 import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:projetos/services/cadastro_service.dart';
+import 'package:projetos/services/secretaria_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/membro.dart';

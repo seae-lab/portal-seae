@@ -63,13 +63,13 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                         isCollapsed: _isCollapsed && widget.isDesktop,
                         mainPageRoute: '/home/dashboard',
                         subItems: [
-                          if (permissions?.hasRole('secretaria_dashboard') ?? false)
+                          if (permissions?.hasRole('secretaria') ?? permissions?.hasRole('secretaria_dashboard') ?? false)
                             _buildSubMenuItem(
                               title: 'Dashboard',
                               route: '/home/dashboard',
                               isSelected: currentRoute.startsWith('/home/dashboard'),
                             ),
-                          if (permissions?.hasRole('secretaria_membros') ?? false)
+                          if (permissions?.hasRole('secretaria') ?? permissions?.hasRole('secretaria_membros') ?? false)
                             _buildSubMenuItem(
                               title: 'Gestão de Membros',
                               route: '/home/gestao_membros',
@@ -81,7 +81,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                               route: '/home/gestao_bases',
                               isSelected: currentRoute.startsWith('/home/gestao_bases'),
                             ),
-                          if (permissions?.hasRole('secretaria_relatorios') ?? false)
+                          if (permissions?.hasRole('secretaria') ?? permissions?.hasRole('secretaria_relatorios') ?? false)
                             _buildSubMenuItem(
                               title: 'Relatórios',
                               route: '/home/relatorios_membros',

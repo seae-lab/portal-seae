@@ -12,7 +12,7 @@ import 'dart:js_interop';
 import 'package:flutter/services.dart';
 
 import '../../../models/membro.dart';
-import '../../../services/cadastro_service.dart';
+import '../../../services/secretaria_service.dart';
 
 class SociosPromoviveisPage extends StatefulWidget {
   const SociosPromoviveisPage({super.key});

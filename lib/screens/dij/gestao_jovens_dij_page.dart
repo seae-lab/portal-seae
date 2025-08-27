@@ -1,3 +1,4 @@
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/gestao_jovens_dij_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/models/jovem_dij_model.dart';
@@ -59,9 +60,9 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
           jovem: jovem,
           onSave: (jovemSalvo) {
             if (jovemSalvo.id != null) {
-              _dijService.updateAluno(jovemSalvo);
+              _dijService.updateJovens(jovemSalvo); // Corrigido
             } else {
-              _dijService.addAluno(jovemSalvo);
+              _dijService.addJovens(jovemSalvo); // Corrigido
             }
             Navigator.of(context).pop();
           },
@@ -80,7 +81,7 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
           TextButton(
             onPressed: () {
-              _dijService.deleteAluno(jovem.id!);
+              _dijService.deleteJovens(jovem.id!); // Corrigido
               Navigator.of(ctx).pop();
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
@@ -137,7 +138,7 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
           ),
           Expanded(
             child: StreamBuilder<List<JovemDij>>(
-              stream: _dijService.getAlunos(),
+              stream: _dijService.getJovens(), // Corrigido
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

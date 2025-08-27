@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/services/auth_service.dart';
-import 'package:projetos/services/cadastro_service.dart';
+import 'package:projetos/services/secretaria_service.dart';
 import '../../models/membro.dart';
 import 'widgets/membro_form_dialog.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
@@ -173,7 +173,8 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool canEdit = _authService.currentUserPermissions?.hasRole('admin') ?? false;
+    bool canEdit = _authService.currentUserPermissions?.hasRole('admin') ?? false;
+    canEdit = _authService.currentUserPermissions?.hasRole('secretaria') ?? false;
 
     return Scaffold(
       appBar: AppBar(

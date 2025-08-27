@@ -1,3 +1,4 @@
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/chamada_dij_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:intl/intl.dart';
@@ -26,18 +27,21 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
     'Pós Juventude'
   ];
   List<String> _ciclosPermitidos = [];
-
-  final Map<String, String> _nomesJovens = {};
+  // NOVO: Variável para controlar a permissão de edição da data
+  bool _podeAlterarData = false;
 
   @override
   void initState() {
     super.initState();
-    _definirCiclosPermitidos();
+    _definirPermissoesECiclos();
   }
 
-  void _definirCiclosPermitidos() {
+  void _definirPermissoesECiclos() {
     final permissions = _authService.currentUserPermissions;
     if (permissions == null) return;
+
+    // Define se o usuário pode alterar a data
+    _podeAlterarData = permissions.hasRole('admin') || permissions.hasRole('dij_diretora');
 
     if (permissions.hasRole('admin') || permissions.hasRole('dij') || permissions.hasRole('dij_diretora')) {
       _ciclosPermitidos = _todosOsCiclos;
@@ -71,12 +75,6 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
   Future<void> _handleSave(Map<String, bool> presencasFinais) async {
     if (_cicloSelecionado == null) return;
 
-    final Map<String, bool> dadosParaSalvar = {};
-    presencasFinais.forEach((id, presente) {
-      final nome = _nomesJovens[id] ?? 'Nome não encontrado';
-      dadosParaSalvar[nome] = presente;
-    });
-
     final chamadaExiste = await _dijService.checkChamadaExists(_dataSelecionada, _cicloSelecionado!);
 
     bool deveSalvar = true;
@@ -105,7 +103,7 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
       _dijService.salvarChamada(
         data: _dataSelecionada,
         ciclo: _cicloSelecionado!,
-        presencas: dadosParaSalvar,
+        presencas: presencasFinais,
       ).then((_) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Chamada para $_cicloSelecionado salva com sucesso!')),
@@ -126,11 +124,12 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
         title: const Text('Chamada DIJ'),
         actions: [
           TextButton.icon(
-            onPressed: () => _selecionarData(context),
-            icon: const Icon(Icons.calendar_today, color: Colors.white),
+            // ATUALIZADO: Habilita o clique apenas para quem tem permissão
+            onPressed: _podeAlterarData ? () => _selecionarData(context) : null,
+            icon: Icon(Icons.calendar_today, color: _podeAlterarData ? Colors.white : Colors.white54),
             label: Text(
               DateFormat('dd/MM/yyyy').format(_dataSelecionada),
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: _podeAlterarData ? Colors.white : Colors.white54),
             ),
           )
         ],
@@ -176,7 +175,7 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
         final presencasIniciais = snapshotChamada.data ?? {};
 
         return StreamBuilder<List<JovemDij>>(
-          stream: _dijService.getAlunos(ciclo: ciclo),
+          stream: _dijService.getJovens(ciclo: ciclo),
           builder: (context, snapshotAlunos) {
             if (snapshotAlunos.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -189,10 +188,6 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
             }
 
             final jovens = snapshotAlunos.data!;
-            _nomesJovens.clear();
-            for (var jovem in jovens) {
-              _nomesJovens[jovem.id!] = jovem.nome;
-            }
 
             return _ChamadaListView(
               key: ValueKey("$ciclo-${data.toIso8601String()}"),
@@ -231,7 +226,7 @@ class _ChamadaListViewState extends State<_ChamadaListView> {
     super.initState();
     _presencas = {};
     for (var jovem in widget.jovens) {
-      _presencas[jovem.id!] = widget.presencasIniciais[jovem.nome] ?? false;
+      _presencas[jovem.id!] = widget.presencasIniciais[jovem.id] ?? false;
     }
   }
 

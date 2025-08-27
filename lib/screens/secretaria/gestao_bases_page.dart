@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/services/auth_service.dart';
-import 'package:projetos/services/cadastro_service.dart';
+import 'package:projetos/services/secretaria_service.dart';
 import 'package:projetos/widgets/loading_overlay.dart';
 
 // Main Page Widget

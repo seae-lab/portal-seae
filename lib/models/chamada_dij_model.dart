@@ -1,4 +1,3 @@
-// NOVO ARQUIVO: lib/models/chamada_dij_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChamadaDij {
@@ -6,14 +5,14 @@ class ChamadaDij {
   final String ciclo;
   final DateTime data;
   final String responsavelNome;
-  final Map<String, bool> alunos;
+  final Map<String, bool> presencas; // Mapa de ID do jovem para presença
 
   ChamadaDij({
     required this.id,
     required this.ciclo,
     required this.data,
     required this.responsavelNome,
-    required this.alunos,
+    required this.presencas,
   });
 
   factory ChamadaDij.fromFirestore(DocumentSnapshot doc) {
@@ -23,10 +22,10 @@ class ChamadaDij {
       ciclo: data['ciclo'] ?? '',
       data: (data['data'] as Timestamp).toDate(),
       responsavelNome: data['responsavelNome'] ?? 'N/A',
-      alunos: Map<String, bool>.from(data['alunos'] ?? {}),
+      presencas: Map<String, bool>.from(data['presencas'] ?? {}),
     );
   }
 
-  int get totalPresentes => alunos.values.where((presente) => presente).length;
-  int get totalAlunos => alunos.length;
+  int get totalPresentes => presencas.values.where((presente) => presente).length;
+  int get totalAlunos => presencas.length;
 }

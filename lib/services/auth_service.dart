@@ -144,14 +144,16 @@ class AuthService with ChangeNotifier {
     if (currentUserPermissions == null || !currentUserPermissions!.hasAnyRole) {
       return '/login';
     }
-    if (currentUserPermissions!.hasRole('admin') || currentUserPermissions!.hasRole('secretaria')) {
+    if (currentUserPermissions!.hasRole('admin') ||
+        currentUserPermissions!.hasRole('secretaria')) {
       return '/home/dashboard';
     }
     if (currentUserPermissions!.hasRole('dij') ||
         currentUserPermissions!.hasRole('dij_diretora') ||
         currentUserPermissions!.hasRole('dij_ciclo_1') ||
         currentUserPermissions!.hasRole('dij_ciclo_2') ||
-        currentUserPermissions!.hasRole('dij_ciclo_3')) {
+        currentUserPermissions!.hasRole('dij_ciclo_3') ||
+        currentUserPermissions!.hasRole('dij_pos_juventude')) {
       return '/home/dij';
     }
 

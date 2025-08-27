@@ -1,3 +1,4 @@
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/calendario_encontros_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -9,7 +10,8 @@ import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import 'package:projetos/services/auth_service.dart';
 import '../../models/calendar_event_model.dart';
-import '../../services/calendar_service.dart';
+import '../../services/dij_service.dart';
+
 
 class CalendarioEncontrosPage extends StatefulWidget {
   const CalendarioEncontrosPage({super.key});
@@ -20,7 +22,8 @@ class CalendarioEncontrosPage extends StatefulWidget {
 }
 
 class _CalendarioEncontrosPageState extends State<CalendarioEncontrosPage> {
-  final CalendarService _calendarService = Modular.get<CalendarService>();
+  // ATUALIZADO: Nome do serviço
+  final DijService _calendarService = Modular.get<DijService>();
   final AuthService _authService = Modular.get<AuthService>();
 
   final CalendarController _calendarController = CalendarController();

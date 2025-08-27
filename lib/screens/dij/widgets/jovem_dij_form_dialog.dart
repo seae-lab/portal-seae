@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:projetos/models/jovem_dij_model.dart';
-import 'package:projetos/services/cadastro_service.dart';
+import 'package:projetos/services/secretaria_service.dart';
 
 class JovemDijFormDialog extends StatefulWidget {
   final JovemDij? jovem;

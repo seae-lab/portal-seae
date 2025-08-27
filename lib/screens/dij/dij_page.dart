@@ -1,3 +1,4 @@
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/dij_page.dart
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -24,6 +25,7 @@ class _DijPageState extends State<DijPage> {
 
   DateTime? _dataSelecionada;
   Future<List<DateTime>>? _datasFuture;
+  Map<String, String> _jovemIdToName = {};
 
   @override
   void initState() {
@@ -33,6 +35,14 @@ class _DijPageState extends State<DijPage> {
       if (datas.isNotEmpty && mounted) {
         setState(() {
           _dataSelecionada = datas.first;
+        });
+      }
+    });
+    // Carrega o mapa de jovens para referência
+    _dijService.getJovens().first.then((jovens) {
+      if (mounted) {
+        setState(() {
+          _jovemIdToName = {for (var j in jovens) j.id!: j.nome};
         });
       }
     });
@@ -109,7 +119,7 @@ class _DijPageState extends State<DijPage> {
             SizedBox(
               height: 250,
               child: FutureBuilder<Map<String, int>>(
-                future: _dijService.getAlunosCountPorCiclo(),
+                future: _dijService.getJovensCountPorCiclo(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -214,10 +224,11 @@ class _DijPageState extends State<DijPage> {
                   final ciclo = _ciclos[index];
                   final chamada = chamadasDoDia.firstWhere(
                         (c) => c.ciclo == ciclo,
-                    orElse: () => ChamadaDij(id: '', ciclo: ciclo, data: _dataSelecionada!, responsavelNome: '', alunos: {}),
+                    // CORRIGIDO: Usa 'presencas'
+                    orElse: () => ChamadaDij(id: '', ciclo: ciclo, data: _dataSelecionada!, responsavelNome: '', presencas: {}),
                   );
 
-                  return _ChamadaCard(chamada: chamada);
+                  return _ChamadaCard(chamada: chamada, jovemIdToName: _jovemIdToName);
                 },
               );
             }
@@ -229,11 +240,15 @@ class _DijPageState extends State<DijPage> {
 
 class _ChamadaCard extends StatelessWidget {
   final ChamadaDij chamada;
-  const _ChamadaCard({required this.chamada});
+  final Map<String, String> jovemIdToName;
+  const _ChamadaCard({required this.chamada, required this.jovemIdToName});
 
   @override
   Widget build(BuildContext context) {
-    final nomesOrdenados = chamada.alunos.keys.toList()..sort();
+    // CORRIGIDO: Usa 'presencas'
+    final _ = chamada.presencas.keys
+        .map((id) => jovemIdToName[id] ?? 'Jovem não encontrado ($id)')
+        .toList()..sort();
 
     return Card(
       elevation: 4,
@@ -263,10 +278,11 @@ class _ChamadaCard extends StatelessWidget {
             else
               Expanded(
                 child: ListView(
-                  children: nomesOrdenados.map((nome) {
-                    final isPresente = chamada.alunos[nome] ?? false;
+                  children: chamada.presencas.entries.map((entry) {
+                    final nomeDoJovem = jovemIdToName[entry.key] ?? 'Jovem não encontrado';
+                    final isPresente = entry.value;
                     return ListTile(
-                      title: Text(nome, style: const TextStyle(fontSize: 14)),
+                      title: Text(nomeDoJovem, style: const TextStyle(fontSize: 14)),
                       trailing: Checkbox(
                         value: isPresente,
                         onChanged: null,
@@ -275,7 +291,7 @@ class _ChamadaCard extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       contentPadding: EdgeInsets.zero,
                     );
-                  }).toList(),
+                  }).toList()..sort((a, b) => (a.title as Text).data!.compareTo((b.title as Text).data!)),
                 ),
               ),
           ],

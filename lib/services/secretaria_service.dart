@@ -1,10 +1,10 @@
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/services/secretaria_service.dart
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:projetos/utils/bairros_coordenadas.dart';
 import '../models/documento.dart';
 import '../models/membro.dart';
 
@@ -25,6 +25,10 @@ class CadastroService {
 
   DocumentReference get _tiposMediunidadeDoc =>
       _firestore.doc('bases/base_tipos_mediunidade');
+
+  // ATUALIZADO: Referência para o DOCUMENTO de coordenadas
+  DocumentReference get _coordenadasDoc =>
+      _firestore.doc('bases/base_coordenadas');
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
@@ -94,16 +98,35 @@ class CadastroService {
     return {};
   }
 
+  // ATUALIZADO: Busca coordenadas do Firestore a partir de um único documento
   Future<LatLng?> getCoordinatesFromBairro(String bairro) async {
     if (bairro.isEmpty) return null;
     final normalizedBairro = bairro.trim().toLowerCase();
+
     if (_bairroCoordenadasCache.containsKey(normalizedBairro)) {
       return _bairroCoordenadasCache[normalizedBairro];
     }
-    final LatLng? localCoords = BAIRROS_COORDENADAS[normalizedBairro];
-    if (localCoords != null) {
-      _bairroCoordenadasCache[normalizedBairro] = localCoords;
-      return localCoords;
+
+    try {
+      final doc = await _coordenadasDoc.get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data.containsKey(normalizedBairro)) {
+          final String coordsString = data[normalizedBairro] as String;
+          final parts = coordsString.split(',');
+          if (parts.length == 2) {
+            final lat = double.tryParse(parts[0].trim());
+            final lng = double.tryParse(parts[1].trim());
+            if (lat != null && lng != null) {
+              final latLng = LatLng(lat, lng);
+              _bairroCoordenadasCache[normalizedBairro] = latLng;
+              return latLng;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Tratar erro, se necessário
     }
     return null;
   }
