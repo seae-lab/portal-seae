@@ -160,6 +160,7 @@ class AuthService with ChangeNotifier {
         currentUserPermissions!.hasRole('dij_ciclo_1') ||
         currentUserPermissions!.hasRole('dij_ciclo_2') ||
         currentUserPermissions!.hasRole('dij_ciclo_3') ||
+        currentUserPermissions!.hasRole('dij_grupo_pais') ||
         currentUserPermissions!.hasRole('dij_pos_juventude')) {
       return '/home/dij';
     }

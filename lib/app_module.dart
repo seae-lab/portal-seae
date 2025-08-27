@@ -22,7 +22,7 @@ import 'package:projetos/services/secretaria_service.dart';
 import 'guards/auth_guard.dart';
 import 'guards/role_guard.dart';
 import 'package:projetos/screens/secretaria/gestao_bases_page.dart';
-import 'package:projetos/screens/dij/gestao_jovens_dij_page.dart';
+import 'package:projetos/screens/dij/gestao_dij_page.dart';
 import 'package:projetos/screens/dij/chamada_dij_page.dart';
 import 'package:projetos/services/dij_service.dart';
 
@@ -81,19 +81,19 @@ class AppModule extends Module {
               child: (context) => const GestaoBasesPage(),
               guards: [RoleGuard(allowedRoles: ['admin'])]),
 
-          // ---- ROTAS DO DIJ ATUALIZADAS ----
+          // ---- ROTAS DO DIJ ----
           ChildRoute('/dij',
               child: (context) => const DijPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_grupo_pais', 'dij_pos_juventude'])]),
           ChildRoute('/dij/jovens',
-              child: (context) => const GestaoJovensDijPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
+              child: (context) => const GestaoDijPageState(),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_grupo_pais', 'dij_pos_juventude'])]),
           ChildRoute('/dij/chamada',
               child: (context) => const ChamadaDijPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_grupo_pais', 'dij_pos_juventude'])]),
           ChildRoute('/dij/calendario',
               child: (context) => const CalendarioEncontrosPage(),
-              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_pos_juventude'])]),
+              guards: [RoleGuard(allowedRoles: ['admin', 'dij', 'dij_diretora', 'dij_ciclo_1', 'dij_ciclo_2', 'dij_ciclo_3', 'dij_grupo_pais', 'dij_pos_juventude'])]),
         ]);
   }
 }

@@ -19,8 +19,8 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
     final permissions = authService.currentUserPermissions;
 
     final canAccessDijGeral = permissions?.hasRole('dij') ?? false;
-    final canAccessGestaoJovens = (permissions?.hasRole('dij_diretora') ?? false) || (permissions?.hasRole('dij') ?? false) || (permissions?.hasRole('dij_ciclo_1') ?? false) || (permissions?.hasRole('dij_ciclo_2') ?? false) || (permissions?.hasRole('dij_ciclo_3') ?? false) || (permissions?.hasRole('dij_pos_juventude') ?? false);
-    final canAccessChamada = (permissions?.hasRole('dij_diretora') ?? false) || (permissions?.hasRole('dij') ?? false) || (permissions?.hasRole('dij_ciclo_1') ?? false) || (permissions?.hasRole('dij_ciclo_2') ?? false) || (permissions?.hasRole('dij_ciclo_3') ?? false) || (permissions?.hasRole('dij_pos_juventude') ?? false);
+    final canAccessGestaoJovens = (permissions?.hasRole('dij_diretora') ?? false) || (permissions?.hasRole('dij') ?? false) || (permissions?.hasRole('dij_ciclo_1') ?? false) || (permissions?.hasRole('dij_ciclo_2') ?? false) || (permissions?.hasRole('dij_ciclo_3') ?? false) || (permissions?.hasRole('dij_grupo_pais') ?? false) || (permissions?.hasRole('dij_pos_juventude') ?? false);
+    final canAccessChamada = (permissions?.hasRole('dij_diretora') ?? false) || (permissions?.hasRole('dij') ?? false) || (permissions?.hasRole('dij_ciclo_1') ?? false) || (permissions?.hasRole('dij_ciclo_2') ?? false) || (permissions?.hasRole('dij_ciclo_3') ?? false) || (permissions?.hasRole('dij_grupo_pais') ?? false) || (permissions?.hasRole('dij_pos_juventude') ?? false);
     final canAccessSecretaria = permissions?.hasRole('secretaria') ?? false;
 
     return AnimatedContainer(
@@ -106,7 +106,7 @@ class _SideMenuWidgetState extends State<SideMenuWidget> {
                           ),
                           if (canAccessGestaoJovens)
                             _buildSubMenuItem(
-                              title: 'Cadastro de Jovens',
+                              title: 'Cadastro',
                               route: '/home/dij/jovens',
                               isSelected: currentRoute.startsWith('/home/dij/jovens'),
                             ),

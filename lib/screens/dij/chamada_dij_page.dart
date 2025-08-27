@@ -50,6 +50,7 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
       if (permissions.hasRole('dij_ciclo_1')) _ciclosPermitidos.add('Primeiro Ciclo');
       if (permissions.hasRole('dij_ciclo_2')) _ciclosPermitidos.add('Segundo Ciclo');
       if (permissions.hasRole('dij_ciclo_3')) _ciclosPermitidos.add('Terceiro Ciclo');
+      if (permissions.hasRole('dij_grupo_pais')) _ciclosPermitidos.add('Grupo de Pais');
       if (permissions.hasRole('dij_pos_juventude')) _ciclosPermitidos.add('Pós Juventude');
     }
 

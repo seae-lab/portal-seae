@@ -1,19 +1,20 @@
-// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/gestao_jovens_dij_page.dart
+// Conteúdo atualizado de ferrazt/pag-seae/pag-seae-f1ecfa12a567d6280aa4dbc6787d965af79b4a34/lib/screens/dij/gestao_dij_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:projetos/models/jovem_dij_model.dart';
 import 'package:projetos/services/auth_service.dart';
 import 'package:projetos/services/dij_service.dart';
 import 'package:projetos/screens/dij/widgets/jovem_dij_form_dialog.dart';
+import 'package:projetos/screens/dij/widgets/responsavel_dij_form_dialog.dart'; // Importe o novo formulário
 
-class GestaoJovensDijPage extends StatefulWidget {
-  const GestaoJovensDijPage({super.key});
+class GestaoDijPageState extends StatefulWidget {
+  const GestaoDijPageState({super.key});
 
   @override
-  State<GestaoJovensDijPage> createState() => _GestaoJovensDijPageState();
+  State<GestaoDijPageState> createState() => _GestaoDijPageState();
 }
 
-class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
+class _GestaoDijPageState extends State<GestaoDijPageState> {
   final AuthService _authService = Modular.get<AuthService>();
   final DijService _dijService = Modular.get<DijService>();
   final TextEditingController _searchController = TextEditingController();
@@ -44,6 +45,7 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
       if (permissions.hasRole('dij_ciclo_2')) _ciclosParaFiltro.add('Segundo Ciclo');
       if (permissions.hasRole('dij_ciclo_3')) _ciclosParaFiltro.add('Terceiro Ciclo');
       if (permissions.hasRole('dij_pos_juventude')) _ciclosParaFiltro.add('Pós Juventude');
+      if (permissions.hasRole('dij_grupo_pais')) _ciclosParaFiltro.add('Grupo de Pais'); // Corrigido
 
       if(_ciclosParaFiltro.length == 2) {
         _ciclosParaFiltro.remove('Todos');
@@ -53,16 +55,30 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
   }
 
   void _abrirFormulario([JovemDij? jovem]) {
+    final bool isGrupoDePais = jovem?.ciclo == 'Grupo de Pais' || _cicloFiltro == 'Grupo de Pais';
+
     showDialog(
       context: context,
       builder: (context) => Dialog.fullscreen(
-        child: JovemDijFormDialog(
+        child: isGrupoDePais
+            ? ResponsavelDijFormDialog(
           jovem: jovem,
           onSave: (jovemSalvo) {
             if (jovemSalvo.id != null) {
-              _dijService.updateJovens(jovemSalvo); // Corrigido
+              _dijService.updateJovens(jovemSalvo);
             } else {
-              _dijService.addJovens(jovemSalvo); // Corrigido
+              _dijService.addJovens(jovemSalvo);
+            }
+            Navigator.of(context).pop();
+          },
+        )
+            : JovemDijFormDialog(
+          jovem: jovem,
+          onSave: (jovemSalvo) {
+            if (jovemSalvo.id != null) {
+              _dijService.updateJovens(jovemSalvo);
+            } else {
+              _dijService.addJovens(jovemSalvo);
             }
             Navigator.of(context).pop();
           },
@@ -81,7 +97,7 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
           TextButton(
             onPressed: () {
-              _dijService.deleteJovens(jovem.id!); // Corrigido
+              _dijService.deleteJovens(jovem.id!);
               Navigator.of(ctx).pop();
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
@@ -95,7 +111,7 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestão de Jovens - DIJ'),
+        title: const Text('Gestão de Jovens/Pais - DIJ'),
         centerTitle: false,
       ),
       body: Column(
@@ -138,13 +154,13 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
           ),
           Expanded(
             child: StreamBuilder<List<JovemDij>>(
-              stream: _dijService.getJovens(), // Corrigido
+              stream: _dijService.getJovens(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('Nenhum jovem encontrado.'));
+                  return const Center(child: Text('Nenhum jovem/pai encontrado.'));
                 }
 
                 var jovens = snapshot.data!;
@@ -175,7 +191,7 @@ class _GestaoJovensDijPageState extends State<GestaoJovensDijPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _abrirFormulario(),
-        tooltip: 'Adicionar Jovem',
+        tooltip: 'Adicionar cadastro',
         backgroundColor: const Color.fromRGBO(45, 55, 131, 1),
         child: const Icon(Icons.add, color: Colors.white),
       ),
