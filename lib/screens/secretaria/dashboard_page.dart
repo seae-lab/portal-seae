@@ -1,10 +1,9 @@
-// Conteúdo atualizado de dashboard_page.dart
-// lib/screens/home/pages/secretaria/dashboard_page.dart
-
 import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:intl/intl.dart';
 import 'package:projetos/services/secretaria_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -30,20 +29,74 @@ class _DashboardPageState extends State<DashboardPage> {
   List<String> _availableYears = [];
 
   final List<Color> _colorPalette = [
-    Colors.cyan.shade400,
-    Colors.amber.shade400,
-    Colors.pink.shade400,
-    Colors.green.shade400,
-    Colors.purple.shade400,
-    Colors.orange.shade400,
-    Colors.teal.shade400,
-    Colors.red.shade400,
+    Colors.cyan.shade400, Colors.amber.shade400, Colors.pink.shade400,
+    Colors.green.shade400, Colors.purple.shade400, Colors.orange.shade400,
+    Colors.teal.shade400, Colors.red.shade400,
+  ];
+
+  final List<Color> _generationBarColors = [
+    Colors.red.shade700, Colors.blueGrey, Colors.deepOrange, Colors.indigo,
+    Colors.green, Colors.purple, Colors.teal,
   ];
 
   @override
   void initState() {
     super.initState();
     _dashboardDataFuture = _loadInitialDashboardData();
+  }
+
+  Future<Map<String, int>> _getAgeDistribution() async {
+    final List<int> birthYears = [];
+
+    final membrosAtivos = _membros.where((m) => m.situacaoSEAE != 5 && m.situacaoSEAE != 6);
+
+    for (var membro in membrosAtivos) {
+      final dateString = membro.dadosPessoais.dataNascimento;
+      if (dateString.isNotEmpty) {
+        try {
+          final dateParts = dateString.split('/');
+          if (dateParts.length == 3) {
+            final year = int.parse(dateParts[2]);
+            if (year > 1900) birthYears.add(year);
+          }
+        } catch (e) {/* Ignora */}
+      }
+    }
+
+    final jovensSnapshot = await _cadastroService.membrosCollection.firestore.collection('base_dij/base_jovens/jovens').get();
+    for (var doc in jovensSnapshot.docs) {
+      final data = doc.data();
+      final dateString = data['dataNascimento'] as String?;
+      if (dateString != null && dateString.isNotEmpty) {
+        try {
+          final dateParts = dateString.split('/');
+          if (dateParts.length == 3) {
+            final year = int.parse(dateParts[2]);
+            if (year > 1900) birthYears.add(year);
+          }
+        } catch (e) {/* Ignora */}
+      }
+    }
+
+    final Map<String, int> generationBrackets = {
+      'G. Grandiosa (1901-1927)': 0, 'G. Silenciosa (1928-1945)': 0,
+      'Baby Boomers (1946-1964)': 0, 'Geração X (1965-1980)': 0,
+      'Millennials (1981-1996)': 0, 'Geração Z (1997-2012)': 0,
+      'Geração Alpha (2013+)': 0,
+    };
+
+    for (var year in birthYears) {
+      if (year <= 1927) generationBrackets['G. Grandiosa (1901-1927)'] = (generationBrackets['G. Grandiosa (1901-1927)'] ?? 0) + 1;
+      else if (year <= 1945) generationBrackets['G. Silenciosa (1928-1945)'] = (generationBrackets['G. Silenciosa (1928-1945)'] ?? 0) + 1;
+      else if (year <= 1964) generationBrackets['Baby Boomers (1946-1964)'] = (generationBrackets['Baby Boomers (1946-1964)'] ?? 0) + 1;
+      else if (year <= 1980) generationBrackets['Geração X (1965-1980)'] = (generationBrackets['Geração X (1965-1980)'] ?? 0) + 1;
+      else if (year <= 1996) generationBrackets['Millennials (1981-1996)'] = (generationBrackets['Millennials (1981-1996)'] ?? 0) + 1;
+      else if (year <= 2012) generationBrackets['Geração Z (1997-2012)'] = (generationBrackets['Geração Z (1997-2012)'] ?? 0) + 1;
+      else if (year >= 2013) generationBrackets['Geração Alpha (2013+)'] = (generationBrackets['Geração Alpha (2013+)'] ?? 0) + 1;
+    }
+
+    generationBrackets.removeWhere((key, value) => value == 0);
+    return generationBrackets;
   }
 
   Future<DashboardData> _loadInitialDashboardData() async {
@@ -53,180 +106,106 @@ class _DashboardPageState extends State<DashboardPage> {
       _cadastroService.getDepartamentos(),
     ]);
 
-    final rawDepartamentos = results[2] as List<String>;
-    final processedDepartamentos = rawDepartamentos.map((d) => d.split('/').first).toSet().toList();
     _membros = results[0] as List<Membro>;
+    final ageDistribution = await _getAgeDistribution();
+
+    final rawDepartamentos = (results[2] as List<String>).map((d) => d.split('/').first).toSet().toList();
 
     final Set<String> years = {};
     for (var membro in _membros) {
       years.addAll(membro.contribuicao.keys);
     }
-    _availableYears = years.toList()..sort();
+    _availableYears = years.toList()..sort((a, b) => b.compareTo(a));
 
     if (_selectedYear == null && _availableYears.isNotEmpty) {
-      _selectedYear = _availableYears.last;
+      _selectedYear = _availableYears.first;
     }
-
-    // Chamada inicial para popular o mapa com o ano mais recente
     await _updateMarkersForYear(_selectedYear);
 
     return DashboardData(
       membros: _membros,
       situacoes: results[1] as Map<String, String>,
-      departamentos: processedDepartamentos,
+      departamentos: rawDepartamentos,
+      ageDistribution: ageDistribution,
     );
   }
 
   Future<void> _updateMarkersForYear(String? year) async {
     _contribuicaoPorBairro.clear();
-
-    if (year == null) {
-      setState(() {
-        _markers = [];
-      });
+    if (year == null || _membros.isEmpty) {
+      if (mounted) setState(() => _markers = []);
       return;
     }
-
     for (var membro in _membros) {
-      int annualContributions = 0;
-
       if (membro.contribuicao.containsKey(year)) {
-        final data = membro.contribuicao[year] as Map<String, dynamic>;
-
-        if (data['quitado'] == true) {
-          annualContributions = 1;
-        } else {
-          final meses = data['meses'] as Map<String, dynamic>?;
-          if (meses != null && meses.values.any((isPaid) => isPaid == true)) {
-            annualContributions = 1;
+        final data = membro.contribuicao[year];
+        if (data is Map && (data['quitado'] == true || (data['meses'] as Map?)?.values.any((p) => p == true) == true)) {
+          final bairro = membro.dadosPessoais.bairro.trim().toLowerCase();
+          if (bairro.isNotEmpty) {
+            _contribuicaoPorBairro.update(bairro, (value) => value + 1, ifAbsent: () => 1);
           }
         }
       }
-
-      if (annualContributions > 0) {
-        final bairro = membro.dadosPessoais.bairro.trim().toLowerCase();
-        if (bairro.isNotEmpty) {
-          _contribuicaoPorBairro.update(bairro, (value) => value + annualContributions,
-              ifAbsent: () => annualContributions);
-        }
+    }
+    final List<Marker> markersList = [];
+    for (final entry in _contribuicaoPorBairro.entries) {
+      final point = await _cadastroService.getCoordinatesFromBairro(entry.key);
+      if (point != null) {
+        markersList.add(Marker(point: point, width: 120, height: 80,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(color: Colors.blue.withOpacity(0.8), borderRadius: BorderRadius.circular(8)),
+                child: Text('${entry.key}: ${entry.value}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+              ),
+              Icon(Icons.location_on, color: Colors.blue.shade700, size: 30),
+            ],
+          ),
+        ));
       }
     }
-
-    final List<Future<void>> futures = [];
-    final List<Marker> markersList = [];
-
-    for (final entry in _contribuicaoPorBairro.entries) {
-      final bairro = entry.key;
-      final contribuicoes = entry.value;
-
-      futures.add(() async {
-        final point = await _cadastroService.getCoordinatesFromBairro(bairro) ?? LatLng(-15.7934, -47.8825);
-
-        markersList.add(
-          Marker(
-            width: 120,
-            height: 80,
-            point: point,
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$bairro: $contribuicoes',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-                Icon(Icons.location_on, color: Colors.blue.shade700, size: 30),
-              ],
-            ),
-          ),
-        );
-      }());
-    }
-
-    await Future.wait(futures);
-
-    setState(() {
-      _markers = markersList;
-    });
+    if (mounted) setState(() => _markers = markersList);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard da Secretaria'),
-        centerTitle: false,
-      ),
+      appBar: AppBar(title: const Text('Dashboard da Secretaria'), centerTitle: false),
       body: FutureBuilder<DashboardData>(
         future: _dashboardDataFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.membros.isEmpty) {
-            return const Center(child: Text('Nenhum dado encontrado.'));
-          }
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
+          if (!snapshot.hasData || snapshot.data!.membros.isEmpty) return const Center(child: Text('Nenhum membro encontrado.'));
 
           final data = snapshot.data!;
-          final totalMembros = data.membros.length;
-
           return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _dashboardDataFuture = _loadInitialDashboardData();
-              });
-            },
+            onRefresh: () async => setState(() => _dashboardDataFuture = _loadInitialDashboardData()),
             child: ListView(
               padding: const EdgeInsets.all(16.0),
               children: [
-                Text(
-                  'Visão Geral - Total de $totalMembros membros',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black87),
-                ),
+                Text('Visão Geral - Total de ${data.membros.length} membros', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black87)),
                 const SizedBox(height: 24),
                 _buildMapaContribuicoes(),
                 const SizedBox(height: 24),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.maxWidth > 900) {
-                      return Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: _buildSituacaoChart(data.membros, data.situacoes)),
-                              const SizedBox(width: 16),
-                              Expanded(child: _buildDepartamentoChart(data.membros, data.departamentos)),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          _buildContribuicaoChart(data.membros),
-                        ],
-                      );
-                    }
-                    return Column(
-                      children: [
-                        _buildSituacaoChart(data.membros, data.situacoes),
-                        const SizedBox(height: 16),
-                        _buildDepartamentoChart(data.membros, data.departamentos),
-                        const SizedBox(height: 16),
-                        _buildContribuicaoChart(data.membros),
-                      ],
-                    );
-                  },
-                ),
+                LayoutBuilder(builder: (context, constraints) {
+                  bool isWide = constraints.maxWidth > 900;
+                  return Flex(
+                    direction: isWide ? Axis.horizontal : Axis.vertical,
+                    crossAxisAlignment: isWide ? CrossAxisAlignment.start : CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _buildSituacaoChart(data.membros, data.situacoes)),
+                      if (isWide) const SizedBox(width: 16),
+                      if (!isWide) const SizedBox(height: 16),
+                      Expanded(child: _buildDepartamentoChart(data.membros, data.departamentos)),
+                    ],
+                  );
+                }),
+                const SizedBox(height: 16),
+                _buildContribuicaoChart(data.membros),
+                const SizedBox(height: 24),
+                _buildAgeDistributionChart(data.ageDistribution),
               ],
             ),
           );
@@ -235,60 +214,73 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildMapaContribuicoes() {
-    final LatLng center = LatLng(-15.7934, -47.8825);
+  Widget _buildAgeDistributionChart(Map<String, int> ageData) {
+    if (ageData.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final totalPessoas = ageData.values.reduce((a, b) => a + b);
+    final maxValue = ageData.values.reduce((a, b) => a > b ? a : b);
+    final formatter = NumberFormat.decimalPattern("pt_BR");
+    final currentYear = DateTime.now().year;
 
-    return _buildChartCard(
-      title: 'Distribuição de Contribuições',
-      chart: Stack(
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Faixas Etárias da População', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            Text('Estimativa ($currentYear) - Total: ${formatter.format(totalPessoas)}', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey.shade600)),
+            const SizedBox(height: 24),
+            ...ageData.entries.map((entry) {
+              final index = ageData.keys.toList().indexOf(entry.key);
+              return _buildChartRow(
+                label: entry.key,
+                value: entry.value,
+                maxValue: maxValue,
+                color: _generationBarColors[index % _generationBarColors.length],
+                formatter: formatter,
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChartRow({required String label, required int value, required int maxValue, required Color color, required NumberFormat formatter}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FlutterMap(
-            options: MapOptions(
-              initialCenter: center,
-              initialZoom: 11.0,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.app',
-              ),
-              MarkerLayer(markers: _markers),
+              Flexible(child: Text(label, style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 16),
+              Text("= ${formatter.format(value)}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+          const SizedBox(height: 6),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final barWidth = maxValue > 0 ? constraints.maxWidth * (value / maxValue) : 0.0;
+              return Container(
+                width: constraints.maxWidth, height: 22,
+                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: barWidth.toDouble(), height: 22,
+                    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
                   ),
-                ],
-              ),
-              child: DropdownButton<String>(
-                value: _selectedYear,
-                hint: const Text('Selecione o ano'),
-                underline: const SizedBox(),
-                items: _availableYears.map((String year) {
-                  return DropdownMenuItem<String>(
-                    value: year,
-                    child: Text(year),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedYear = newValue;
-                  });
-                  _updateMarkersForYear(newValue);
-                },
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -298,20 +290,14 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildChartCard({required String title, required Widget chart}) {
     return Card(
       elevation: 4,
-      shadowColor: const Color.fromRGBO(0, 0, 0, 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.white,
       child: Container(
         padding: const EdgeInsets.all(20),
         height: 400,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87)),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 24),
             Expanded(child: chart),
           ],
@@ -320,195 +306,165 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildSituacaoChart(
-      List<Membro> membros, Map<String, String> situacoes) {
-    final Map<String, int> situacaoCount = {};
+  Widget _buildMapaContribuicoes() {
+    return _buildChartCard(
+      title: 'Distribuição de Contribuições',
+      chart: Stack(
+        children: [
+          FlutterMap(
+            options: MapOptions(initialCenter: LatLng(-15.7934, -47.8825), initialZoom: 11.0),
+            children: [
+              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'br.org.seae.projetos'),
+              MarkerLayer(markers: _markers),
+            ],
+          ),
+          if (_availableYears.isNotEmpty)
+            Positioned(
+              top: 10, right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))]),
+                child: DropdownButton<String>(
+                  value: _selectedYear,
+                  underline: const SizedBox(),
+                  items: _availableYears.map((year) => DropdownMenuItem<String>(value: year, child: Text(year))).toList(),
+                  onChanged: (newValue) {
+                    if (newValue != null) {
+                      setState(() => _selectedYear = newValue);
+                      _updateMarkersForYear(newValue);
+                    }
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSituacaoChart(List<Membro> membros, Map<String, String> situacoes) {
+    final Map<String, int> dataMap = {};
     for (var membro in membros) {
-      final situacaoId = membro.situacaoSEAE.toString();
-      final situacaoNome = situacoes[situacaoId] ?? 'Não definida';
-      situacaoCount[situacaoNome] = (situacaoCount[situacaoNome] ?? 0) + 1;
+      final situacaoNome = situacoes[membro.situacaoSEAE.toString()] ?? 'Não definida';
+      dataMap.update(situacaoNome, (value) => value + 1, ifAbsent: () => 1);
     }
+    if (dataMap.isEmpty) return _buildChartCard(title: 'Membros por Situação', chart: const Center(child: Text("Nenhum dado para exibir.")));
+
+    final double maxVal = dataMap.values.fold(0, (max, v) => v > max ? v : max).toDouble();
+    final double interval = maxVal > 0 ? (maxVal / 5).ceilToDouble() : 1;
 
     return _buildChartCard(
       title: 'Membros por Situação',
       chart: BarChart(
         BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: (situacaoCount.values
-              .fold(0.0, (max, v) => v > max ? v.toDouble() : max) *
-              1.2)
-              .ceilToDouble(),
-          barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (group) => Colors.blueGrey,
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                String weekDay = situacaoCount.keys.elementAt(group.x.toInt());
-                final value = rod.toY.toInt();
-                return BarTooltipItem(
-                  '$weekDay\n',
-                  const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14),
-                  children: <TextSpan>[
-                    TextSpan(
-                      text: value.toString(),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          barGroups: situacaoCount.entries.map((entry) {
-            final index = situacaoCount.keys.toList().indexOf(entry.key);
-            return BarChartGroupData(
-              x: index,
-              barRods: [
-                BarChartRodData(
-                  toY: entry.value.toDouble(),
-                  width: 16,
-                  borderRadius: const BorderRadius.all(Radius.circular(4)),
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade800],
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                  ),
-                ),
-              ],
-            );
+          maxY: maxVal > 0 ? maxVal * 1.2 : 5,
+          barGroups: dataMap.entries.map((entry) {
+            final index = dataMap.keys.toList().indexOf(entry.key);
+            return BarChartGroupData(x: index, barRods: [
+              BarChartRodData(toY: entry.value.toDouble(), width: 16, borderRadius: BorderRadius.circular(4),
+                  gradient: LinearGradient(colors: [Colors.blue.shade400, Colors.blue.shade800], begin: Alignment.bottomCenter, end: Alignment.topCenter)),
+            ]);
           }).toList(),
           titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  final index = value.toInt();
-                  if (index >= 0 && index < situacaoCount.keys.length) {
-                    return SideTitleWidget(
-                      axisSide: meta.axisSide,
-                      angle: -0.5,
-                      child: Text(
-                        situacaoCount.keys.elementAt(index),
-                        style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    );
-                  }
-                  return const Text('');
-                },
-                reservedSize: 40,
-              ),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 32,
-                interval: (situacaoCount.values
-                    .fold(0.0, (max, v) => v > max ? v.toDouble() : max) /
-                    5)
-                    .ceilToDouble(),
-                getTitlesWidget: (value, meta) =>
-                    Text('${value.toInt()}', style: const TextStyle(fontSize: 11)),
-              ),
-            ),
+            show: true,
+            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40,
+                getTitlesWidget: (value, meta) => SideTitleWidget(axisSide: meta.axisSide, angle: -0.5, child: Text(dataMap.keys.elementAt(value.toInt()), style: const TextStyle(fontSize: 10))))),
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, interval: interval,
+                getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 11)))),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           borderData: FlBorderData(show: false),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: (situacaoCount.values
-                .fold(0.0, (max, v) => v > max ? v.toDouble() : max) /
-                5)
-                .ceilToDouble(),
-            getDrawingHorizontalLine: (value) =>
-            const FlLine(color: Colors.black12, strokeWidth: 1),
-          ),
+          gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: interval),
         ),
       ),
     );
   }
 
-  Widget _buildDepartamentoChart(
-      List<Membro> membros, List<String> departamentos) {
-    final Map<String, int> deptoCount = {for (var d in departamentos) d: 0};
-
+  Widget _buildDepartamentoChart(List<Membro> membros, List<String> departamentos) {
+    final Map<String, int> dataMap = {};
     for (var membro in membros) {
-      final memberMainDepts = membro.atividades.map((a) => a.split('/').first).toSet();
-
-      for (var mainDept in memberMainDepts) {
-        if (deptoCount.containsKey(mainDept)) {
-          deptoCount[mainDept] = deptoCount[mainDept]! + 1;
-        }
+      for (var depto in membro.atividades.map((a) => a.split('/').first)) {
+        dataMap.update(depto, (value) => value + 1, ifAbsent: () => 1);
       }
     }
+    if (dataMap.isEmpty) return _buildChartCard(title: 'Membros por Departamento', chart: const Center(child: Text("Nenhum dado para exibir.")));
 
-    final totalMemberAssignments =
-    deptoCount.values.fold(0, (sum, count) => sum + count);
-
-    deptoCount.removeWhere((key, value) => value == 0);
-
-    final List<PieChartSectionData> sections = deptoCount.entries.map((entry) {
-      final index = deptoCount.keys.toList().indexOf(entry.key);
-      final isTouched = index == touchedIndex;
-      final fontSize = isTouched ? 18.0 : 14.0;
-      final radius = isTouched ? 120.0 : 110.0;
-      final percentage = totalMemberAssignments > 0
-          ? (entry.value / totalMemberAssignments * 100).toStringAsFixed(1)
-          : "0.0";
-
-      return PieChartSectionData(
-        value: entry.value.toDouble(),
-        title: '$percentage%',
-        titleStyle: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-          shadows: const [Shadow(color: Colors.black38, blurRadius: 3)],
-        ),
-        radius: radius,
-        color: _colorPalette[index % _colorPalette.length],
-        borderSide: isTouched
-            ? BorderSide(
-            color: _colorPalette[index % _colorPalette.length].withAlpha(204),
-            width: 6)
-            : const BorderSide(color: Color.fromRGBO(255, 255, 255, 0)),
-        badgeWidget: _buildChartBadge(
-            entry.key, _colorPalette[index % _colorPalette.length]),
-        badgePositionPercentageOffset: .98,
-      );
-    }).toList();
+    final totalMemberAssignments = dataMap.values.fold(0, (sum, count) => sum + count);
 
     return _buildChartCard(
       title: 'Membros por Departamento',
       chart: PieChart(
         PieChartData(
-          pieTouchData: PieTouchData(
-            touchCallback: (FlTouchEvent event, pieTouchResponse) {
+          pieTouchData: PieTouchData(touchCallback: (event, pieTouchResponse) {
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
               setState(() {
-                if (!event.isInterestedForInteractions ||
-                    pieTouchResponse == null ||
-                    pieTouchResponse.touchedSection == null) {
-                  touchedIndex = -1;
-                  return;
-                }
-                touchedIndex =
-                    pieTouchResponse.touchedSection!.touchedSectionIndex;
+                touchedIndex = pieTouchResponse?.touchedSection?.touchedSectionIndex ?? -1;
               });
-            },
+            });
+          }),
+          sections: dataMap.entries.map((entry) {
+            final index = dataMap.keys.toList().indexOf(entry.key);
+            final isTouched = index == touchedIndex;
+            final percentage = totalMemberAssignments > 0 ? (entry.value / totalMemberAssignments * 100) : 0.0;
+            return PieChartSectionData(
+              color: _colorPalette[index % _colorPalette.length],
+              value: entry.value.toDouble(),
+              title: '${percentage.toStringAsFixed(1)}%',
+              radius: isTouched ? 120.0 : 110.0,
+              titleStyle: TextStyle(fontSize: isTouched ? 18.0 : 14.0, fontWeight: FontWeight.bold, color: Colors.white, shadows: const [Shadow(color: Colors.black38, blurRadius: 2)]),
+              badgeWidget: _buildChartBadge(entry.key, _colorPalette[index % _colorPalette.length]),
+              badgePositionPercentageOffset: .98,
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContribuicaoChart(List<Membro> membros) {
+    final Map<String, int> dataMap = {};
+    for (var membro in membros) {
+      membro.contribuicao.forEach((year, data) {
+        if (data is Map && (data['quitado'] == true || (data['meses'] as Map?)?.values.any((p) => p == true) == true)) {
+          dataMap.update(year, (value) => value + 1, ifAbsent: () => 1);
+        }
+      });
+    }
+
+    final sortedYears = dataMap.keys.toList()..sort();
+    if (sortedYears.isEmpty) return _buildChartCard(title: 'Total de Contribuintes por Ano', chart: const Center(child: Text("Nenhum dado para exibir.")));
+
+    final double maxVal = dataMap.values.fold(0, (max, v) => v > max ? v : max).toDouble();
+    final double interval = maxVal > 0 ? (maxVal / 5).ceilToDouble() : 1;
+
+    return _buildChartCard(
+      title: 'Total de Contribuintes por Ano',
+      chart: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: maxVal > 0 ? maxVal * 1.2 : 5,
+          lineBarsData: [
+            LineChartBarData(
+              spots: sortedYears.map((year) => FlSpot(double.parse(year), dataMap[year]!.toDouble())).toList(),
+              isCurved: true,
+              gradient: LinearGradient(colors: [Colors.green.shade300, Colors.green.shade800]),
+              barWidth: 5,
+              dotData: const FlDotData(show: true),
+            ),
+          ],
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, interval: sortedYears.length > 5 ? (sortedYears.length / 4).ceilToDouble() : 1,
+                getTitlesWidget: (value, meta) => Padding(padding: const EdgeInsets.only(top: 8.0), child: Text(value.toInt().toString(), style: const TextStyle(fontSize: 11))))),
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, interval: interval,
+                getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 11)))),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
-          sections: sections,
-          borderData: FlBorderData(show: false),
-          sectionsSpace: 2,
-          centerSpaceRadius: 45,
+          borderData: FlBorderData(show: true, border: Border.all(color: Colors.black12)),
+          gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: interval),
         ),
       ),
     );
@@ -520,156 +476,9 @@ class _DashboardPageState extends State<DashboardPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: const Color.fromRGBO(0, 0, 0, 0.25),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.25), blurRadius: 4, offset: const Offset(0, 2))],
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContribuicaoChart(List<Membro> membros) {
-    final Map<String, int> contribuicaoCount = {};
-    for (var membro in membros) {
-      membro.contribuicao.forEach((year, data) {
-        if (data is Map) {
-          if (data['quitado'] == true) {
-            contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
-            return;
-          }
-          final meses = data['meses'] as Map<String, dynamic>?;
-          if (meses != null && meses.values.any((isPaid) => isPaid == true)) {
-            contribuicaoCount[year] = (contribuicaoCount[year] ?? 0) + 1;
-          }
-        }
-      });
-    }
-
-    final sortedKeys = contribuicaoCount.keys.toList()..sort();
-    if (sortedKeys.isEmpty) {
-      return _buildChartCard(
-          title: 'Total de Membros Contribuintes por Ano',
-          chart: const Center(child: Text("Nenhum dado de contribuição.")));
-    }
-
-    final List<FlSpot> spots = sortedKeys.map((year) {
-      return FlSpot(double.parse(year), contribuicaoCount[year]!.toDouble());
-    }).toList();
-
-    return _buildChartCard(
-      title: 'Total de Membros Contribuintes por Ano',
-      chart: LineChart(
-        LineChartData(
-          lineTouchData: LineTouchData(
-            handleBuiltInTouches: true,
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (touchedSpot) =>
-              const Color.fromRGBO(96, 125, 139, 0.8),
-              getTooltipItems: (touchedSpots) {
-                return touchedSpots.map((touchedSpot) {
-                  return LineTooltipItem(
-                    'Ano: ${touchedSpot.x.toInt()}\nMembros: ${touchedSpot.y.toInt()}',
-                    const TextStyle(color: Colors.white, fontSize: 12),
-                  );
-                }).toList();
-              },
-            ),
-          ),
-          gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              getDrawingHorizontalLine: (value) =>
-              const FlLine(color: Colors.black12, strokeWidth: 1)),
-          titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-                interval: sortedKeys.length > 5
-                    ? (sortedKeys.length / 4).ceilToDouble()
-                    : 1,
-                getTitlesWidget: (value, meta) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(value.toInt().toString(),
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w500)),
-                  );
-                },
-              ),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 40,
-                interval: (contribuicaoCount.values
-                    .fold(0.0, (max, v) => v > max ? v.toDouble() : max) /
-                    5)
-                    .ceilToDouble(),
-                getTitlesWidget: (value, meta) => Text('${value.toInt()}',
-                    style: const TextStyle(fontSize: 11)),
-              ),
-            ),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          borderData: FlBorderData(
-              show: true, border: Border.all(color: Colors.black12)),
-          minX: double.parse(sortedKeys.first),
-          maxX: double.parse(sortedKeys.last),
-          minY: 0,
-          maxY: (contribuicaoCount.values
-              .fold(0.0, (max, v) => v > max ? v.toDouble() : max) *
-              1.2)
-              .ceilToDouble(),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              gradient: LinearGradient(colors: [
-                Colors.green.shade300,
-                Colors.green.shade800
-              ]),
-              barWidth: 5,
-              isStrokeCapRound: true,
-              dotData: FlDotData(
-                show: true,
-                getDotPainter: (spot, percent, barData, index) =>
-                    FlDotCirclePainter(
-                        radius: 6,
-                        color: Colors.green.shade800,
-                        strokeWidth: 2,
-                        strokeColor: Colors.white),
-              ),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.green.shade300.withAlpha(77),
-                    Colors.green.shade800.withAlpha(0)
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
     );
   }
 }
@@ -678,10 +487,13 @@ class DashboardData {
   final List<Membro> membros;
   final Map<String, String> situacoes;
   final List<String> departamentos;
+  final Map<String, int> ageDistribution;
 
   DashboardData({
     required this.membros,
     required this.situacoes,
     required this.departamentos,
+    required this.ageDistribution,
   });
 }
+

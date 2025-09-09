@@ -304,4 +304,5 @@ class CadastroService {
     }
     await batch.commit();
   }
+
 }
