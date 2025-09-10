@@ -1,12 +1,24 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:intl/intl.dart';
 import 'package:projetos/services/secretaria_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:projetos/widgets/loading_overlay.dart';
+import 'dart:js_interop';
+import 'package:flutter/services.dart';
+import 'package:web/web.dart' as web;
+
 import '../../models/membro.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -21,6 +33,13 @@ class _DashboardPageState extends State<DashboardPage> {
   late Future<DashboardData> _dashboardDataFuture;
   int touchedIndex = -1;
   final Map<String, int> _contribuicaoPorBairro = {};
+  bool _isGeneratingPdf = false;
+
+  final GlobalKey _mapaKey = GlobalKey();
+  final GlobalKey _situacaoChartKey = GlobalKey();
+  final GlobalKey _departamentoChartKey = GlobalKey();
+  final GlobalKey _contribuicaoChartKey = GlobalKey();
+  final GlobalKey _ageDistributionChartKey = GlobalKey();
 
   List<Marker> _markers = [];
   List<Membro> _membros = [];
@@ -168,55 +187,212 @@ class _DashboardPageState extends State<DashboardPage> {
     if (mounted) setState(() => _markers = markersList);
   }
 
+  Future<Uint8List> _capturePng(GlobalKey key, String widgetName) async {
+    // A renderização de widgets complexos pode levar alguns frames.
+    // Este laço tenta capturar o widget algumas vezes antes de desistir.
+    for (int i = 0; i < 5; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      try {
+        if (key.currentContext == null) {
+          // Se o contexto ainda é nulo, espera e tenta novamente.
+          continue;
+        }
+        final boundary = key.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 1.5);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData != null) {
+          return byteData.buffer.asUint8List();
+        }
+      } catch (e) {
+        // Ignora o erro e tenta novamente na próxima iteração.
+      }
+    }
+    // Se todas as tentativas falharem, lança uma exceção.
+    throw Exception('Não foi possível capturar o widget "$widgetName" após 5 tentativas.');
+  }
+
+
+  Future<void> _gerarPdf() async {
+    setState(() => _isGeneratingPdf = true);
+    // Pequeno delay inicial para garantir que a UI tenha tempo de se estabilizar.
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    try {
+      final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+      final ttf = pw.Font.ttf(fontData);
+      final boldFontData = await rootBundle.load("assets/fonts/Roboto-Bold.ttf");
+      final boldTtf = pw.Font.ttf(boldFontData);
+
+      final logoImageBytes = await rootBundle.load('assets/images/logo_SEAE_azul.png');
+      final logoImage = pw.MemoryImage(logoImageBytes.buffer.asUint8List());
+
+      final now = DateFormat("dd/MM/yyyy 'às' HH:mm").format(DateTime.now());
+
+      final mapaBytes = await _capturePng(_mapaKey, "Mapa");
+      final situacaoBytes = await _capturePng(_situacaoChartKey, "Situação");
+      final departamentoBytes = await _capturePng(_departamentoChartKey, "Departamento");
+      final contribuicaoBytes = await _capturePng(_contribuicaoChartKey, "Contribuição");
+      final ageBytes = await _capturePng(_ageDistributionChartKey, "Faixa Etária");
+
+      final pdf = pw.Document();
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          theme: pw.ThemeData.withFont(base: ttf, bold: boldTtf),
+          header: (context) => _buildPdfHeader(now, logoImage, boldTtf),
+          build: (context) => [
+            pw.Image(pw.MemoryImage(mapaBytes)),
+            pw.SizedBox(height: 20),
+            pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(child: pw.Image(pw.MemoryImage(situacaoBytes))),
+                  pw.SizedBox(width: 10),
+                  pw.Expanded(child: pw.Image(pw.MemoryImage(departamentoBytes))),
+                ]
+            ),
+            pw.SizedBox(height: 20),
+            pw.Image(pw.MemoryImage(contribuicaoBytes)),
+            pw.SizedBox(height: 20),
+            pw.Image(pw.MemoryImage(ageBytes)),
+          ],
+          footer: (context) => _buildPdfFooter(context),
+        ),
+      );
+
+      final bytes = await pdf.save();
+
+      if (kIsWeb) {
+        final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'application/pdf'));
+        final url = web.URL.createObjectURL(blob);
+        web.window.open(url, '_blank');
+        Future.delayed(const Duration(seconds: 5), () => web.URL.revokeObjectURL(url));
+      } else {
+        await Printing.layoutPdf(onLayout: (format) async => bytes);
+      }
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao gerar PDF: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 10))
+        );
+      }
+    } finally {
+      if(mounted) setState(() => _isGeneratingPdf = false);
+    }
+  }
+
+  pw.Widget _buildPdfHeader(String now, pw.MemoryImage logo, pw.Font font) {
+    return pw.Container(
+      alignment: pw.Alignment.center,
+      margin: const pw.EdgeInsets.only(bottom: 20.0),
+      child: pw.Column(
+        children: [
+          pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Image(logo, width: 50, height: 50),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text('Dashboard da Secretaria', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, font: font)),
+                    pw.SizedBox(height: 5),
+                    pw.Text('Gerado em: $now', style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+                pw.SizedBox(width: 50),
+              ]
+          ),
+          pw.Divider(color: PdfColors.grey),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfFooter(pw.Context context) {
+    return pw.Container(
+      alignment: pw.Alignment.centerRight,
+      margin: const pw.EdgeInsets.only(top: 10.0),
+      child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard da Secretaria'), centerTitle: false),
-      body: FutureBuilder<DashboardData>(
-        future: _dashboardDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
-          if (!snapshot.hasData || snapshot.data!.membros.isEmpty) return const Center(child: Text('Nenhum membro encontrado.'));
-
-          final data = snapshot.data!;
-          return RefreshIndicator(
-            onRefresh: () async => setState(() => _dashboardDataFuture = _loadInitialDashboardData()),
-            child: ListView(
-              padding: const EdgeInsets.all(16.0),
-              children: [
-                Text('Visão Geral - Total de ${data.membros.length} membros', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black87)),
-                const SizedBox(height: 24),
-                _buildMapaContribuicoes(),
-                const SizedBox(height: 24),
-                LayoutBuilder(builder: (context, constraints) {
-                  bool isWide = constraints.maxWidth > 900;
-                  return Flex(
-                    direction: isWide ? Axis.horizontal : Axis.vertical,
-                    crossAxisAlignment: isWide ? CrossAxisAlignment.start : CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: _buildSituacaoChart(data.membros, data.situacoes)),
-                      if (isWide) const SizedBox(width: 16),
-                      if (!isWide) const SizedBox(height: 16),
-                      Expanded(child: _buildDepartamentoChart(data.membros, data.departamentos)),
-                    ],
+    return LoadingOverlay(
+      isLoading: _isGeneratingPdf,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Dashboard da Secretaria'),
+          centerTitle: false,
+          actions: [
+            FutureBuilder<DashboardData>(
+                future: _dashboardDataFuture,
+                builder: (context, snapshot) {
+                  final bool hasData = snapshot.hasData && !snapshot.hasError && snapshot.data!.membros.isNotEmpty;
+                  return IconButton(
+                    icon: const Icon(Icons.picture_as_pdf),
+                    onPressed: hasData && !_isGeneratingPdf ? _gerarPdf : null,
+                    tooltip: 'Exportar para PDF',
                   );
-                }),
-                const SizedBox(height: 16),
-                _buildContribuicaoChart(data.membros),
-                const SizedBox(height: 24),
-                _buildAgeDistributionChart(data.ageDistribution),
-              ],
+                }
             ),
-          );
-        },
+          ],
+        ),
+        body: FutureBuilder<DashboardData>(
+          future: _dashboardDataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.hasError) return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
+            if (!snapshot.hasData || snapshot.data!.membros.isEmpty) return const Center(child: Text('Nenhum membro encontrado.'));
+
+            final data = snapshot.data!;
+            return RefreshIndicator(
+              onRefresh: () async => setState(() => _dashboardDataFuture = _loadInitialDashboardData()),
+              // TROCADO ListView por SingleChildScrollView + Column
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Text('Visão Geral - Total de ${data.membros.length} membros', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black87)),
+                    const SizedBox(height: 24),
+                    RepaintBoundary(key: _mapaKey, child: _buildMapaContribuicoes()),
+                    const SizedBox(height: 24),
+                    LayoutBuilder(builder: (context, constraints) {
+                      bool isWide = constraints.maxWidth > 900;
+                      return Flex(
+                        direction: isWide ? Axis.horizontal : Axis.vertical,
+                        crossAxisAlignment: isWide ? CrossAxisAlignment.start : CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: RepaintBoundary(key: _situacaoChartKey, child: _buildSituacaoChart(data.membros, data.situacoes))),
+                          if (isWide) const SizedBox(width: 16),
+                          if (!isWide) const SizedBox(height: 16),
+                          Expanded(child: RepaintBoundary(key: _departamentoChartKey, child: _buildDepartamentoChart(data.membros, data.departamentos))),
+                        ],
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                    RepaintBoundary(key: _contribuicaoChartKey, child: _buildContribuicaoChart(data.membros)),
+                    const SizedBox(height: 24),
+                    RepaintBoundary(key: _ageDistributionChartKey, child: _buildAgeDistributionChart(data.ageDistribution)),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 
   Widget _buildAgeDistributionChart(Map<String, int> ageData) {
     if (ageData.isEmpty) {
-      return const SizedBox.shrink();
+      return _buildChartCard(
+        title: 'Faixas Etárias da População',
+        chart: const Center(
+          child: Text("Nenhum dado para exibir."),
+        ),
+      );
     }
     final totalPessoas = ageData.values.reduce((a, b) => a + b);
     final maxValue = ageData.values.reduce((a, b) => a > b ? a : b);
@@ -496,4 +672,3 @@ class DashboardData {
     required this.ageDistribution,
   });
 }
-

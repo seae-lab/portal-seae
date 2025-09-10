@@ -72,13 +72,13 @@ class _GestaoDijPage extends State<GestaoDijPage> {
     }
   }
 
-  void _handleSave(JovemDij jovemSalvo) {
+// Substitua a função _handleSave existente por esta
+  Future<void> _handleSave(JovemDij jovemSalvo) async {
     if (jovemSalvo.id != null) {
-      _dijService.updateJovens(jovemSalvo);
+      await _dijService.updateJovens(jovemSalvo);
     } else {
-      _dijService.addJovens(jovemSalvo);
+      await _dijService.addJovens(jovemSalvo);
     }
-    Navigator.of(context).pop();
   }
 
   void _abrirFormularioJovem() {

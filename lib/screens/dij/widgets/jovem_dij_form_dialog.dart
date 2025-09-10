@@ -6,7 +6,7 @@ import 'package:projetos/services/secretaria_service.dart';
 
 class JovemDijFormDialog extends StatefulWidget {
   final JovemDij? jovem;
-  final Function(JovemDij) onSave;
+  final Future<void> Function(JovemDij) onSave;
 
   const JovemDijFormDialog({super.key, this.jovem, required this.onSave});
 
@@ -78,10 +78,21 @@ class _JovemDijFormDialogState extends State<JovemDijFormDialog> {
     }
   }
 
-  void _salvar() {
+  void _salvar() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      widget.onSave(_formData);
+      try {
+        await widget.onSave(_formData);
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao salvar: $e')),
+          );
+        }
+      }
     }
   }
 
