@@ -27,8 +27,7 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
     'Pós Juventude'
   ];
   List<String> _ciclosPermitidos = [];
-  // NOVO: Variável para controlar a permissão de edição da data
-  bool _podeAlterarData = false;
+
 
   @override
   void initState() {
@@ -39,9 +38,6 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
   void _definirPermissoesECiclos() {
     final permissions = _authService.currentUserPermissions;
     if (permissions == null) return;
-
-    // Define se o usuário pode alterar a data
-    _podeAlterarData = permissions.hasRole('admin') || permissions.hasRole('dij_diretora');
 
     if (permissions.hasRole('admin') || permissions.hasRole('dij') || permissions.hasRole('dij_diretora')) {
       _ciclosPermitidos = _todosOsCiclos;
@@ -126,11 +122,11 @@ class _ChamadaDijPageState extends State<ChamadaDijPage> {
         actions: [
           TextButton.icon(
             // ATUALIZADO: Habilita o clique apenas para quem tem permissão
-            onPressed: _podeAlterarData ? () => _selecionarData(context) : null,
-            icon: Icon(Icons.calendar_today, color: _podeAlterarData ? Colors.white : Colors.white54),
+            onPressed: () => _selecionarData(context),
+            icon: Icon(Icons.calendar_today, color: Colors.black),
             label: Text(
               DateFormat('dd/MM/yyyy').format(_dataSelecionada),
-              style: TextStyle(color: _podeAlterarData ? Colors.white : Colors.white54),
+              style: TextStyle(color: Colors.black),
             ),
           )
         ],

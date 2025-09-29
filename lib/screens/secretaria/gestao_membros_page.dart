@@ -51,6 +51,13 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Future<void> _loadDependenciesAndMembers() async {
+    // Garante que não haja múltiplas execuções simultâneas
+    if (!_isLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
     try {
       final results = await Future.wait([
         _cadastroService.getSituacoes(),
@@ -61,7 +68,8 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
         setState(() {
           _dependenciesFuture = Future.value(_PageDependencies(
             situacoes: results[0] as Map<String, String>,
-            anosContribuicao: (results[1] as List<String>)..sort(),
+            // Ordena os anos em ordem decrescente
+            anosContribuicao: (results[1] as List<String>)..sort((a, b) => b.compareTo(a)),
             departamentos: results[2] as List<String>,
           ));
           _isLoading = false;
@@ -72,6 +80,10 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
         setState(() {
           _isLoading = false;
         });
+        // Opcional: mostrar um SnackBar com o erro
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar dados: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -126,10 +138,8 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
       builder: (context) => Dialog.fullscreen(child: MembroFormDialog(membro: membro)),
     ).then((_) {
       if (mounted) {
-        setState(() {
-          _isLoading = true;
-          _loadDependenciesAndMembers();
-        });
+        // Apenas recarrega. O StreamBuilder vai reconstruir a lista.
+        _loadDependenciesAndMembers();
       }
     });
   }
@@ -161,6 +171,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir membro: $error'), backgroundColor: Colors.red));
                   }
                 } finally {
+                  // O finally garante que o reload aconteça mesmo em caso de erro.
                   if (mounted) _loadDependenciesAndMembers();
                 }
               },
@@ -171,10 +182,48 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
     );
   }
 
+  // ATUALIZADO: Adicionado o controle de loading
+  Future<void> _handleToggleAnoQuitado(Membro membro, String year) async {
+    if (mounted) setState(() => _isLoading = true);
+    try {
+      await _cadastroService.toggleAnoQuitado(membro.id!, year);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao atualizar ano: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      // A tela de loading some quando o StreamBuilder for atualizado,
+      // mas garantimos que ela feche aqui caso algo dê errado.
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ATUALIZADO: Adicionado o controle de loading
+  Future<void> _handleToggleMesPagamento(Membro membro, String year, String mes) async {
+    if (mounted) setState(() => _isLoading = true);
+    try {
+      await _cadastroService.toggleMesPagamento(membro.id!, year, mes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao atualizar mês: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     bool canEdit = _authService.currentUserPermissions?.hasRole('admin') ?? false;
-    canEdit = _authService.currentUserPermissions?.hasRole('secretaria') ?? false;
+    if (!canEdit) {
+      canEdit = _authService.currentUserPermissions?.hasRole('secretaria') ?? false;
+    }
+
 
     return Scaffold(
       appBar: AppBar(
@@ -187,7 +236,7 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
           future: _dependenciesFuture,
           builder: (context, dependenciesSnapshot) {
             if (dependenciesSnapshot.connectionState == ConnectionState.waiting && _isLoading) {
-              return const SizedBox.shrink();
+              return const Center(child: CircularProgressIndicator());
             }
             if (dependenciesSnapshot.hasError) {
               return Center(child: Text('Erro ao carregar dependências: ${dependenciesSnapshot.error}'));
@@ -223,8 +272,12 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                   child: StreamBuilder<List<Membro>>(
                     stream: _cadastroService.getMembros(),
                     builder: (context, membrosSnapshot) {
-                      if (membrosSnapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                      if (membrosSnapshot.connectionState == ConnectionState.waiting && _isLoading) {
+                        // Mantém a lista antiga visível por baixo do loading
+                        // para uma transição mais suave, exceto no primeiro carregamento.
+                        if (membrosSnapshot.data == null) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
                       }
                       if (membrosSnapshot.hasError) {
                         return Center(child: Text('Erro ao carregar membros: ${membrosSnapshot.error}'));
@@ -237,8 +290,9 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                       final filteredMembers = allMembers.where((membro) {
                         final matchesSearchTerm = _searchTerm.isEmpty ||
                             membro.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-                            membro.dadosPessoais.cpf.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-                            membro.dadosPessoais.email.toLowerCase().contains(_searchTerm.toLowerCase());
+                            (membro.dadosPessoais.cpf).toLowerCase().contains(_searchTerm.toLowerCase()) ||
+                            (membro.dadosPessoais.email).toLowerCase().contains(_searchTerm.toLowerCase());
+
 
                         final matchesDepartment = _selectedDepartments.isEmpty ||
                             _selectedDepartments.every((selectedDepto) =>
@@ -302,6 +356,9 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
                               situacoes: dependencies.situacoes,
                               allAnosContribuicao: dependencies.anosContribuicao,
                               getContributionStatus: () => _getContributionStatusForMember(membro),
+                              // Passando as novas funções de callback
+                              onToggleAnoQuitado: (year) => _handleToggleAnoQuitado(membro, year),
+                              onToggleMesPagamento: (year, mes) => _handleToggleMesPagamento(membro, year, mes),
                             ),
                           );
                         },
@@ -405,10 +462,11 @@ class _GestaoMembrosPageState extends State<GestaoMembrosPage> {
   }
 
   Widget _buildContributionYearFilter(List<String> anos) {
+    // A lista 'anos' já vem ordenada decrescentemente
     return InkWell(
       onTap: () => _showMultiSelectDialog(
         title: 'Filtrar por Ano de Contribuição',
-        options: { for (var ano in anos) ano: ano },
+        options: { for (var ano in anos) ano: ano }, // O Map manterá a ordem de inserção
         selectedOptions: _selectedContributionYears,
         onConfirm: (values) {
           setState(() {
@@ -596,6 +654,9 @@ class MemberListItem extends StatelessWidget {
   final Map<String, String> situacoes;
   final List<String> allAnosContribuicao;
   final ({String text, Color color}) Function() getContributionStatus;
+  final Function(String year) onToggleAnoQuitado;
+  final Function(String year, String mes) onToggleMesPagamento;
+
 
   const MemberListItem({
     super.key,
@@ -606,6 +667,8 @@ class MemberListItem extends StatelessWidget {
     required this.situacoes,
     required this.allAnosContribuicao,
     required this.getContributionStatus,
+    required this.onToggleAnoQuitado,
+    required this.onToggleMesPagamento,
   });
 
   @override
@@ -700,7 +763,7 @@ class MemberListItem extends StatelessWidget {
             : null,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Column(
@@ -721,56 +784,79 @@ class MemberListItem extends StatelessWidget {
                   _buildDetailRow('Mediunidade Ostensiva:', membro.mediunidadeOstensiva ? 'Sim' : 'Não'),
                   const Divider(height: 20),
                   _buildSectionTitle('Contribuições'),
-                  if (membro.contribuicao.keys.isEmpty)
-                    const Text('Nenhum ano de contribuição registrado.')
-                  else
-                    ...membro.contribuicao.keys.toList()
-                        .where((year) => allAnosContribuicao.contains(year))
-                        .toList()
-                        .map((year) {
-                      final anoData = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
-                      final isQuitado = anoData['quitado'] as bool? ?? false;
+                  ...allAnosContribuicao.map((year) {
+                    final anoData = membro.contribuicao[year] as Map<String, dynamic>? ?? {};
+                    final isQuitado = anoData['quitado'] as bool? ?? false;
 
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(year, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                                if (isQuitado) const Chip(label: Text('Ano Quitado'), backgroundColor: Colors.lightGreenAccent, padding: EdgeInsets.zero)
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: List.generate(12, (index) {
-                                  final mesAbrev = mesesAbrev[index];
-                                  final mesKey = mesesLowerCase[index];
-                                  final isPaid = (anoData['meses'] as Map<String, dynamic>?)?[mesKey] ?? false;
-                                  return Tooltip(
-                                    message: isPaid ? 'Pago' : 'Pendente',
-                                    child: Container(
-                                      width: 28,
-                                      margin: const EdgeInsets.only(right: 4),
-                                      padding: const EdgeInsets.symmetric(vertical: 4),
-                                      decoration: BoxDecoration(
-                                          color: isPaid ? Colors.green[100] : Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: isPaid ? Colors.green : Colors.grey.shade300)),
-                                      child: Center(child: Text(mesAbrev, style: TextStyle(fontSize: 10, color: isPaid ? Colors.green[800] : Colors.grey[600]))),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8.0),
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8.0),
+                          border: Border.all(color: Colors.grey.shade300)
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(year, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              MouseRegion(
+                                cursor: canEdit ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                                child: InkWell(
+                                  onTap: canEdit ? () => onToggleAnoQuitado(year) : null,
+                                  customBorder: const StadiumBorder(), // Para o efeito de clique ficar redondo
+                                  child: AbsorbPointer( // Impede que o Chip capture o clique do InkWell
+                                    child: Chip(
+                                      label: Text(isQuitado ? 'Ano Quitado' : 'Marcar ano como quitado'),
+                                      backgroundColor: isQuitado ? Colors.green.shade300 : Colors.grey.shade300,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      labelStyle: TextStyle(
+                                        color: isQuitado ? Colors.white : Colors.black87,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  );
-                                }),
+                                  ),
+                                ),
                               ),
-                            )
-                          ],
-                        ),
-                      );
-                    }),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: List.generate(12, (index) {
+                                final mesAbrev = mesesAbrev[index];
+                                final mesKey = mesesLowerCase[index];
+                                final isPaid = (anoData['meses'] as Map<String, dynamic>?)?[mesKey] as bool? ?? false;
+                                return Tooltip(
+                                  message: isPaid ? 'Pago' : 'Pendente',
+                                  child: MouseRegion(
+                                    cursor: canEdit ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                                    child: InkWell(
+                                      onTap: canEdit ? () => onToggleMesPagamento(year, mesKey) : null,
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Container(
+                                        width: 32,
+                                        margin: const EdgeInsets.only(right: 4),
+                                        padding: const EdgeInsets.symmetric(vertical: 6),
+                                        decoration: BoxDecoration(
+                                            color: isPaid ? Colors.green[100] : Colors.grey[200],
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: isPaid ? Colors.green : Colors.grey.shade300)),
+                                        child: Center(child: Text(mesAbrev, style: TextStyle(fontSize: 10, color: isPaid ? Colors.green[800] : Colors.grey[600], fontWeight: FontWeight.bold))),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          )
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -785,7 +871,7 @@ class MemberListItem extends StatelessWidget {
     child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent)),
   );
 
-  Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
+  Widget _buildDetailRow(String label, String? value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: Text.rich(
@@ -797,7 +883,7 @@ class MemberListItem extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             TextSpan(
-              text: value.isNotEmpty ? value : "N/A",
+              text: value != null && value.isNotEmpty ? value : "N/A",
               style: TextStyle(color: valueColor),
             ),
           ],

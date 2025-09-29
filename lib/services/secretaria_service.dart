@@ -305,4 +305,50 @@ class CadastroService {
     await batch.commit();
   }
 
+  Future<void> toggleAnoQuitado(String membroId, String year) async {
+    final docRef = membrosCollection.doc(membroId);
+    return _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) {
+        throw Exception("Membro não encontrado!");
+      }
+      // Assumimos que snapshot.data() retorna um Map<String, dynamic>
+      final data = snapshot.data() as Map<String, dynamic>;
+      final contribuicao = data['contribuicao'] as Map<String, dynamic>? ?? {};
+
+      // Pega o valor atual ou assume 'false' se não existir a estrutura
+      final anoData = contribuicao[year] as Map<String, dynamic>? ?? {};
+      final bool isCurrentlyQuitado = anoData['quitado'] as bool? ?? false;
+
+      // O caminho para o campo no Firestore usando dot notation
+      final fieldPath = 'contribuicao.$year.quitado';
+
+      // Atualiza o campo para o valor oposto
+      transaction.update(docRef, {fieldPath: !isCurrentlyQuitado});
+    });
+  }
+
+  Future<void> toggleMesPagamento(String membroId, String year, String mes) async {
+    final docRef = membrosCollection.doc(membroId);
+    return _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) {
+        throw Exception("Membro não encontrado!");
+      }
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final contribuicao = data['contribuicao'] as Map<String, dynamic>? ?? {};
+
+      // Pega o valor atual do mês ou assume 'false'
+      final anoData = contribuicao[year] as Map<String, dynamic>? ?? {};
+      final mesesData = anoData['meses'] as Map<String, dynamic>? ?? {};
+      final bool isCurrentlyPaid = mesesData[mes] as bool? ?? false;
+
+      // Caminho para o campo do mês específico
+      final fieldPath = 'contribuicao.$year.meses.$mes';
+
+      // Atualiza o campo com o valor oposto
+      transaction.update(docRef, {fieldPath: !isCurrentlyPaid});
+    });
+  }
 }
