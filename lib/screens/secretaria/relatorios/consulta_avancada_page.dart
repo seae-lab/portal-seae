@@ -24,7 +24,6 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
   final CadastroService _cadastroService = Modular.get<CadastroService>();
   List<Membro> _allMembers = [];
   List<Membro> _resultados = [];
-  bool _isLoading = true;
   bool _isSearching = false;
   bool _isGeneratingPdf = false;
   bool _hasSearched = false;
@@ -62,7 +61,6 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
     try {
       final situacoes = await _cadastroService.getSituacoes();
       final members = await _cadastroService.getMembros().first;
@@ -70,12 +68,10 @@ class _ConsultaAvancadaPageState extends State<ConsultaAvancadaPage> {
         setState(() {
           _situacoesMap = situacoes;
           _allMembers = members;
-          _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
       }
     }
