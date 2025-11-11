@@ -174,8 +174,23 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
   Future<void> _loadSituacoes() async {
     try {
       _situacoesMap = await _cadastroService.getSituacoes();
-      final idSocioEfetivo = _situacoesMap.keys.firstWhere((k) => _situacoesMap[k] == 'Sócio Efetivo', orElse: () => '4');
-      if (mounted) setState(() => _selectedStatusIds = [idSocioEfetivo]);
+
+      // Procura pelo ID do Sócio Efetivo (mantendo o fallback original '4')
+      final idSocioEfetivo = _situacoesMap.keys.firstWhere(
+            (k) => _situacoesMap[k] == 'Sócio Efetivo',
+        orElse: () => '4',
+      );
+
+      // Procura pelo ID do Sócio Contribuinte (sem fallback, só adiciona se existir)
+      final idSocioContribuinte = _situacoesMap.keys.firstWhere(
+            (k) => _situacoesMap[k] == 'Sócio Contribuinte'
+      );
+
+      // Cria a lista de IDs padrão
+      final List<String> defaultIds = [idSocioEfetivo];
+      defaultIds.add(idSocioContribuinte);
+
+      if (mounted) setState(() => _selectedStatusIds = defaultIds);
     } catch (e) {
       if (mounted) setState(() => _error = 'Erro ao carregar as situações: $e');
     }
@@ -305,7 +320,7 @@ class _ControleContribuicoesPageState extends State<ControleContribuicoesPage> {
                   border: OutlineInputBorder(),
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 items: _availableYears.map((String year) {
                   return DropdownMenuItem<String>(
                     value: year,
